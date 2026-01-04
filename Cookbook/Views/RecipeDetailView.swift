@@ -1,10 +1,20 @@
 import SwiftUI
+#if os(iOS)
+import CoreNFC
+#endif
 
 struct RecipeDetailView: View {
     @EnvironmentObject var store: RecipeStore
     @State var recipe: Recipe
     @State private var showingEditSheet = false
+    @State private var showingShareSheet = false
+    @State private var recipeFileURL: URL?
     @Environment(\.dismiss) private var dismiss
+    
+    #if os(iOS)
+    @StateObject private var nfcSharer = NFCRecipeSharer()
+    @State private var showingNFCAlert = false
+    #endif
     
     var body: some View {
         ScrollView {
@@ -168,14 +178,47 @@ struct RecipeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Edit") {
-                    showingEditSheet = true
+                Menu {
+                    Button(action: { showingEditSheet = true }) {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    
+                    Button(action: shareRecipe) {
+                        Label("Share Recipe", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    #if os(iOS)
+                    if NFCNDEFReaderSession.readingAvailable {
+                        Button(action: shareViaNFC) {
+                            Label("Share via Tap (NFC)", systemImage: "wave.3.right")
+                        }
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
         .sheet(isPresented: $showingEditSheet) {
             RecipeEditView(recipe: recipe)
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = recipeFileURL {
+                ShareSheet(items: [url])
+            }
+        }
+        #if os(iOS)
+        .alert("NFC Status", isPresented: $showingNFCAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(nfcSharer.statusMessage)
+        }
+        .onChange(of: nfcSharer.statusMessage) { oldValue, newValue in
+            if !newValue.isEmpty {
+                showingNFCAlert = true
+            }
+        }
+        #endif
         .onReceive(store.$recipes) { recipes in
             if let updated = recipes.first(where: { $0.id == recipe.id }) {
                 recipe = updated
@@ -207,6 +250,31 @@ struct RecipeDetailView: View {
     private func markAsCooked() {
         store.addCookedDate(recipe)
     }
+    
+    private func shareRecipe() {
+        // Create temporary file with .cookbook.json extension
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "\(recipe.title.replacingOccurrences(of: " ", with: "_")).cookbook.json"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+        
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(recipe)
+            try data.write(to: fileURL)
+            
+            recipeFileURL = fileURL
+            showingShareSheet = true
+        } catch {
+            print("Error creating share file: \(error)")
+        }
+    }
+    
+    #if os(iOS)
+    private func shareViaNFC() {
+        nfcSharer.shareRecipe(recipe)
+    }
+    #endif
 }
 
 #Preview {

@@ -10,9 +10,22 @@
 		2B243B9A2F0B11D400840694 /* Cookbook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cookbook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		2B243BCF2F0B27A000840694 /* Exceptions for "Cookbook" folder in "Cookbook" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2B243B992F0B11D400840694 /* Cookbook */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2B243B9C2F0B11D400840694 /* Cookbook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2B243BCF2F0B27A000840694 /* Exceptions for "Cookbook" folder in "Cookbook" target */,
+			);
 			path = Cookbook;
 			sourceTree = "<group>";
 		};
@@ -262,6 +275,8 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Cookbook/Info.plist;
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Share recipes with nearby devices using tap-to-share";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To add photos to your recipes";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -321,6 +336,8 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Cookbook/Info.plist;
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Share recipes with nearby devices using tap-to-share";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To add photos to your recipes";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

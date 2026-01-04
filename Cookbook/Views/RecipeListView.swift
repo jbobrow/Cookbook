@@ -1,9 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RecipeListView: View {
     @EnvironmentObject var store: RecipeStore
     @State private var searchText = ""
     @State private var showingAddRecipe = false
+    @State private var showingImportSheet = false
+    @State private var importAlert: ImportAlert?
     
     var filteredRecipes: [Recipe] {
         if searchText.isEmpty {
@@ -22,6 +25,12 @@ struct RecipeListView: View {
                     NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
                         RecipeRowView(recipe: recipe)
                     }
+                    .swipeActions(edge: .leading) {
+                        Button(action: { shareRecipe(recipe) }) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.blue)
+                    }
                 }
                 .onDelete(perform: deleteRecipes)
             }
@@ -29,13 +38,34 @@ struct RecipeListView: View {
             .navigationTitle("Cookbook")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingAddRecipe = true }) {
+                    Menu {
+                        Button(action: { showingAddRecipe = true }) {
+                            Label("New Recipe", systemImage: "plus")
+                        }
+                        Button(action: { showingImportSheet = true }) {
+                            Label("Import Recipe", systemImage: "square.and.arrow.down")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                     }
                 }
             }
             .sheet(isPresented: $showingAddRecipe) {
                 RecipeEditView(recipe: Recipe())
+            }
+            .fileImporter(
+                isPresented: $showingImportSheet,
+                allowedContentTypes: [.json, UTType(filenameExtension: "cookbook.json") ?? .json],
+                allowsMultipleSelection: true
+            ) { result in
+                handleImport(result: result)
+            }
+            .alert(item: $importAlert) { alert in
+                Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("OK"))
+                )
             }
         }
     }
@@ -44,6 +74,101 @@ struct RecipeListView: View {
         offsets.forEach { index in
             let recipe = filteredRecipes[index]
             store.deleteRecipe(recipe)
+        }
+    }
+    
+    private func shareRecipe(_ recipe: Recipe) {
+        // Create temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "\(recipe.title.replacingOccurrences(of: " ", with: "_")).cookbook.json"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+        
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(recipe)
+            try data.write(to: fileURL)
+            
+            // Present share sheet
+            #if os(iOS)
+            let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController {
+                rootVC.present(activityVC, animated: true)
+            }
+            #elseif os(macOS)
+            let picker = NSSharingServicePicker(items: [fileURL])
+            if let view = NSApplication.shared.keyWindow?.contentView {
+                picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+            }
+            #endif
+        } catch {
+            print("Error sharing recipe: \(error)")
+        }
+    }
+    
+    private func handleImport(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            var successCount = 0
+            var errorCount = 0
+            
+            for url in urls {
+                do {
+                    // Ensure we have access to the file
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if accessing {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+                    
+                    let data = try Data(contentsOf: url)
+                    var recipe = try JSONDecoder().decode(Recipe.self, from: data)
+                    
+                    // Generate new ID to avoid conflicts
+                    recipe.id = UUID()
+                    recipe.dateCreated = Date()
+                    
+                    // Reset checked ingredients for fresh cooking
+                    recipe.ingredients = recipe.ingredients.map { ingredient in
+                        var newIngredient = ingredient
+                        newIngredient.isChecked = false
+                        return newIngredient
+                    }
+                    
+                    store.saveRecipe(recipe)
+                    successCount += 1
+                } catch {
+                    print("Error importing recipe from \(url.lastPathComponent): \(error)")
+                    errorCount += 1
+                }
+            }
+            
+            // Show result
+            if successCount > 0 {
+                let message = errorCount > 0
+                    ? "Imported \(successCount) recipe\(successCount == 1 ? "" : "s"). Failed to import \(errorCount)."
+                    : "Successfully imported \(successCount) recipe\(successCount == 1 ? "" : "s")!"
+                
+                importAlert = ImportAlert(
+                    title: "Import Complete",
+                    message: message
+                )
+            } else if errorCount > 0 {
+                importAlert = ImportAlert(
+                    title: "Import Failed",
+                    message: "Could not import any recipes. Please check the file format."
+                )
+            }
+            
+        case .failure(let error):
+            print("Error selecting files: \(error)")
+            importAlert = ImportAlert(
+                title: "Import Failed",
+                message: error.localizedDescription
+            )
         }
     }
 }
@@ -123,6 +248,13 @@ struct RecipeRowView: View {
             return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
         }
     }
+}
+
+// Helper struct for import alerts
+struct ImportAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
 }
 
 #Preview {
