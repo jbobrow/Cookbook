@@ -7,6 +7,8 @@ struct RecipeListView: View {
     @State private var showingAddRecipe = false
     @State private var showingImportSheet = false
     @State private var importAlert: ImportAlert?
+    @State private var recipesToDelete: IndexSet?
+    @State private var showingDeleteConfirmation = false
     
     var filteredRecipes: [Recipe] {
         if searchText.isEmpty {
@@ -67,14 +69,46 @@ struct RecipeListView: View {
                     dismissButton: .default(Text("OK"))
                 )
             }
+            .alert("Delete Recipe\(deleteCount > 1 ? "s" : "")", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    recipesToDelete = nil
+                }
+                Button("Delete", role: .destructive, action: confirmDelete)
+            } message: {
+                Text(deleteMessage)
+            }
+        }
+    }
+
+    private var deleteCount: Int {
+        recipesToDelete?.count ?? 0
+    }
+
+    private var deleteMessage: String {
+        guard let offsets = recipesToDelete else { return "" }
+
+        if offsets.count == 1, let index = offsets.first {
+            let recipe = filteredRecipes[index]
+            return "Are you sure you want to delete '\(recipe.title)'? This action cannot be undone."
+        } else {
+            return "Are you sure you want to delete \(offsets.count) recipes? This action cannot be undone."
         }
     }
     
     private func deleteRecipes(at offsets: IndexSet) {
+        recipesToDelete = offsets
+        showingDeleteConfirmation = true
+    }
+
+    private func confirmDelete() {
+        guard let offsets = recipesToDelete else { return }
+
         offsets.forEach { index in
             let recipe = filteredRecipes[index]
             store.deleteRecipe(recipe)
         }
+
+        recipesToDelete = nil
     }
     
     private func shareRecipe(_ recipe: Recipe) {

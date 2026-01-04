@@ -8,6 +8,7 @@ struct RecipeDetailView: View {
     @State var recipe: Recipe
     @State private var showingEditSheet = false
     @State private var showingShareSheet = false
+    @State private var showingDeleteConfirmation = false
     @State private var recipeFileURL: URL?
     @Environment(\.dismiss) private var dismiss
     
@@ -18,8 +19,8 @@ struct RecipeDetailView: View {
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Recipe Image
+            VStack(alignment: .leading, spacing: 0) {
+                // Recipe Image (edge-to-edge)
                 if let imageData = recipe.imageData,
                    let image = createPlatformImage(from: imageData) {
                     image
@@ -27,9 +28,9 @@ struct RecipeDetailView: View {
                         .scaledToFill()
                         .frame(maxWidth: .infinity)
                         .frame(height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipped()
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    Rectangle()
                         .fill(Color.gray.opacity(0.2))
                         .frame(height: 300)
                         .overlay(
@@ -38,8 +39,10 @@ struct RecipeDetailView: View {
                                 .foregroundColor(.gray)
                         )
                 }
-                
-                // Title and Rating
+
+                // Content with padding
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title and Rating
                 VStack(alignment: .leading, spacing: 8) {
                     Text(recipe.title)
                         .font(.largeTitle)
@@ -162,18 +165,19 @@ struct RecipeDetailView: View {
                     }
                 }
                 
-                // Mark as Cooked Button
-                Button(action: markAsCooked) {
-                    Label("Mark as Cooked", systemImage: "checkmark.circle")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                    // Mark as Cooked Button
+                    Button(action: markAsCooked) {
+                        Label("Mark as Cooked", systemImage: "checkmark.circle")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
+                .padding()
             }
-            .padding()
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -194,6 +198,12 @@ struct RecipeDetailView: View {
                         }
                     }
                     #endif
+
+                    Divider()
+
+                    Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
+                        Label("Delete Recipe", systemImage: "trash")
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -206,6 +216,12 @@ struct RecipeDetailView: View {
             if let url = recipeFileURL {
                 ShareSheet(items: [url])
             }
+        }
+        .alert("Delete Recipe", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive, action: deleteRecipe)
+        } message: {
+            Text("Are you sure you want to delete '\(recipe.title)'? This action cannot be undone.")
         }
         #if os(iOS)
         .alert("NFC Status", isPresented: $showingNFCAlert) {
@@ -275,6 +291,11 @@ struct RecipeDetailView: View {
         nfcSharer.shareRecipe(recipe)
     }
     #endif
+
+    private func deleteRecipe() {
+        store.deleteRecipe(recipe)
+        dismiss()
+    }
 }
 
 #Preview {
