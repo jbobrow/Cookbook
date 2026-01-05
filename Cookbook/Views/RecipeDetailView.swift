@@ -1,7 +1,4 @@
 import SwiftUI
-#if os(iOS)
-import CoreNFC
-#endif
 
 struct RecipeDetailView: View {
     @EnvironmentObject var store: RecipeStore
@@ -9,11 +6,6 @@ struct RecipeDetailView: View {
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
     @Environment(\.dismiss) private var dismiss
-    
-    #if os(iOS)
-    @StateObject private var nfcSharer = NFCRecipeSharer()
-    @State private var showingNFCAlert = false
-    #endif
     
     var body: some View {
         ScrollView {
@@ -191,14 +183,6 @@ struct RecipeDetailView: View {
                     Button(action: shareRecipe) {
                         Label("Share Recipe", systemImage: "square.and.arrow.up")
                     }
-                    
-                    #if os(iOS)
-                    if NFCNDEFReaderSession.readingAvailable {
-                        Button(action: shareViaNFC) {
-                            Label("Share via Tap (NFC)", systemImage: "wave.3.right")
-                        }
-                    }
-                    #endif
 
                     Divider()
 
@@ -219,18 +203,6 @@ struct RecipeDetailView: View {
         } message: {
             Text("Are you sure you want to delete '\(recipe.title)'? This action cannot be undone.")
         }
-        #if os(iOS)
-        .alert("NFC Status", isPresented: $showingNFCAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(nfcSharer.statusMessage)
-        }
-        .onChange(of: nfcSharer.statusMessage) { oldValue, newValue in
-            if !newValue.isEmpty {
-                showingNFCAlert = true
-            }
-        }
-        #endif
         .onReceive(store.$recipes) { recipes in
             if let updated = recipes.first(where: { $0.id == recipe.id }) {
                 recipe = updated
@@ -293,12 +265,6 @@ struct RecipeDetailView: View {
             print("Error sharing recipe: \(error)")
         }
     }
-    
-    #if os(iOS)
-    private func shareViaNFC() {
-        nfcSharer.shareRecipe(recipe)
-    }
-    #endif
 
     private func deleteRecipe() {
         store.deleteRecipe(recipe)
