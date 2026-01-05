@@ -107,6 +107,8 @@ struct RecipeEditView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            CategoryPicker(selectedCategoryID: $recipe.categoryID)
         }
     }
 

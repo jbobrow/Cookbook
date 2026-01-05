@@ -22,6 +22,7 @@ struct Recipe: Identifiable, Codable {
     var prepDuration: TimeInterval // in seconds
     var cookDuration: TimeInterval // in seconds
     var notes: String
+    var categoryID: UUID?
     
     init(
         id: UUID = UUID(),
@@ -35,7 +36,8 @@ struct Recipe: Identifiable, Codable {
         rating: Int = 0,
         prepDuration: TimeInterval = 0,
         cookDuration: TimeInterval = 0,
-        notes: String = ""
+        notes: String = "",
+        categoryID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -49,6 +51,7 @@ struct Recipe: Identifiable, Codable {
         self.prepDuration = prepDuration
         self.cookDuration = cookDuration
         self.notes = notes
+        self.categoryID = categoryID
     }
     
     var image: Image? {

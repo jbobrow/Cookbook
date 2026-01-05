@@ -3,18 +3,24 @@ import Combine
 
 class RecipeStore: ObservableObject {
     @Published var recipes: [Recipe] = []
-    
+    @Published var categories: [Category] = []
+
     private let fileManager = FileManager.default
     private var iCloudURL: URL? {
         fileManager.url(forUbiquityContainerIdentifier: nil)?
             .appendingPathComponent("Documents")
             .appendingPathComponent("Recipes")
     }
+
+    private var categoriesURL: URL? {
+        iCloudURL?.deletingLastPathComponent().appendingPathComponent("categories.json")
+    }
     
     init() {
         setupiCloudDirectory()
+        loadCategories()
         loadRecipes()
-        
+
         // Watch for iCloud changes
         NotificationCenter.default.addObserver(
             self,
@@ -34,6 +40,7 @@ class RecipeStore: ObservableObject {
     
     @objc private func iCloudDataChanged() {
         DispatchQueue.main.async {
+            self.loadCategories()
             self.loadRecipes()
         }
     }
@@ -61,6 +68,7 @@ class RecipeStore: ObservableObject {
             
             DispatchQueue.main.async {
                 self.recipes = loadedRecipes.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                self.cleanupOrphanedCategoryReferences()
             }
         } catch {
             print("Error loading recipes: \(error)")
@@ -105,5 +113,79 @@ class RecipeStore: ObservableObject {
         var updatedRecipe = recipe
         updatedRecipe.datesCooked.append(Date())
         saveRecipe(updatedRecipe)
+    }
+
+    // MARK: - Category Management
+
+    func loadCategories() {
+        guard let url = categoriesURL else { return }
+
+        guard fileManager.fileExists(atPath: url.path) else {
+            categories = []
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let loadedCategories = try JSONDecoder().decode([Category].self, from: data)
+            DispatchQueue.main.async {
+                self.categories = loadedCategories.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            }
+        } catch {
+            print("Error loading categories: \(error)")
+            categories = []
+        }
+    }
+
+    func saveCategory(_ category: Category) {
+        if let index = categories.firstIndex(where: { $0.id == category.id }) {
+            categories[index] = category
+        } else {
+            categories.append(category)
+        }
+        categories.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        saveCategories()
+    }
+
+    func deleteCategory(_ category: Category) {
+        categories.removeAll { $0.id == category.id }
+
+        // Remove category from all recipes
+        for recipe in recipes where recipe.categoryID == category.id {
+            var updatedRecipe = recipe
+            updatedRecipe.categoryID = nil
+            saveRecipe(updatedRecipe)
+        }
+
+        saveCategories()
+    }
+
+    private func saveCategories() {
+        guard let url = categoriesURL else { return }
+
+        do {
+            let data = try JSONEncoder().encode(categories)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            print("Error saving categories: \(error)")
+        }
+    }
+
+    func category(for recipe: Recipe) -> Category? {
+        guard let categoryID = recipe.categoryID else { return nil }
+        return categories.first { $0.id == categoryID }
+    }
+
+    private func cleanupOrphanedCategoryReferences() {
+        let categoryIDs = Set(categories.map { $0.id })
+
+        for recipe in recipes {
+            if let categoryID = recipe.categoryID, !categoryIDs.contains(categoryID) {
+                // Recipe has a reference to a deleted category, clean it up
+                var updatedRecipe = recipe
+                updatedRecipe.categoryID = nil
+                saveRecipe(updatedRecipe)
+            }
+        }
     }
 }

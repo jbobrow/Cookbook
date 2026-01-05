@@ -19,22 +19,66 @@ struct RecipeListView: View {
             recipe.ingredients.contains { $0.text.localizedCaseInsensitiveContains(searchText) }
         }
     }
+
+    var groupedRecipes: [(category: Category?, recipes: [Recipe])] {
+        if store.categories.isEmpty {
+            return [(nil, filteredRecipes)]
+        }
+
+        var groups: [(Category?, [Recipe])] = []
+        let categoryIDs = Set(store.categories.map { $0.id })
+
+        // Group recipes by category
+        for category in store.categories {
+            let categoryRecipes = filteredRecipes.filter { $0.categoryID == category.id }
+            if !categoryRecipes.isEmpty {
+                groups.append((category, categoryRecipes))
+            }
+        }
+
+        // Add uncategorized recipes (recipes with no category OR orphaned category references)
+        let uncategorized = filteredRecipes.filter { recipe in
+            recipe.categoryID == nil || !categoryIDs.contains(recipe.categoryID!)
+        }
+        if !uncategorized.isEmpty {
+            groups.append((nil, uncategorized))
+        }
+
+        return groups
+    }
     
     var body: some View {
         NavigationStack {
             List {
-                ForEach(filteredRecipes) { recipe in
-                    NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
-                        RecipeRowView(recipe: recipe)
-                    }
-                    .swipeActions(edge: .leading) {
-                        Button(action: { shareRecipe(recipe) }) {
-                            Label("Share", systemImage: "square.and.arrow.up")
+                ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
+                    Section {
+                        ForEach(group.recipes) { recipe in
+                            NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+                                RecipeRowView(recipe: recipe, showCategory: false)
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button(action: { shareRecipe(recipe) }) {
+                                    Label("Share", systemImage: "square.and.arrow.up")
+                                }
+                                .tint(.blue)
+                            }
                         }
-                        .tint(.blue)
+                        .onDelete { offsets in
+                            deleteRecipesInSection(at: offsets, in: groupIndex)
+                        }
+                    } header: {
+                        if let category = group.category {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(category.color)
+                                    .frame(width: 12, height: 12)
+                                Text(category.name)
+                            }
+                        } else if !store.categories.isEmpty {
+                            Text("Uncategorized")
+                        }
                     }
                 }
-                .onDelete(perform: deleteRecipes)
             }
             .searchable(text: $searchText, prompt: "Search recipes")
             .navigationTitle("Cookbook")
@@ -95,6 +139,17 @@ struct RecipeListView: View {
         }
     }
     
+    private func deleteRecipesInSection(at offsets: IndexSet, in sectionIndex: Int) {
+        let group = groupedRecipes[sectionIndex]
+        let recipesToDeleteList = offsets.map { group.recipes[$0] }
+
+        // Show confirmation with recipe names
+        recipesToDelete = IndexSet(recipesToDeleteList.compactMap { recipe in
+            filteredRecipes.firstIndex(where: { $0.id == recipe.id })
+        })
+        showingDeleteConfirmation = true
+    }
+
     private func deleteRecipes(at offsets: IndexSet) {
         recipesToDelete = offsets
         showingDeleteConfirmation = true
@@ -209,7 +264,9 @@ struct RecipeListView: View {
 
 struct RecipeRowView: View {
     let recipe: Recipe
-    
+    var showCategory: Bool = true
+    @EnvironmentObject var store: RecipeStore
+
     var body: some View {
         HStack(spacing: 12) {
             // Recipe image thumbnail
@@ -235,6 +292,17 @@ struct RecipeRowView: View {
                     .font(.headline)
                 
                 HStack(spacing: 8) {
+                    if showCategory, let category = store.category(for: recipe) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(category.color)
+                                .frame(width: 8, height: 8)
+                            Text(category.name)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
                     if recipe.rating > 0 {
                         HStack(spacing: 2) {
                             ForEach(0..<recipe.rating, id: \.self) { _ in
@@ -244,7 +312,7 @@ struct RecipeRowView: View {
                             }
                         }
                     }
-                    
+
                     if recipe.prepDuration > 0 || recipe.cookDuration > 0 {
                         Text(formatTotalTime(prep: recipe.prepDuration, cook: recipe.cookDuration))
                             .font(.caption)
