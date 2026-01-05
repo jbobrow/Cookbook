@@ -172,6 +172,7 @@ struct RecipeDetailView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
+                    .buttonStyle(.plain)
                     .padding(.top, 8)
                 }
                 .padding()

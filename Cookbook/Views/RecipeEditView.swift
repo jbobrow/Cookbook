@@ -368,10 +368,17 @@ struct RecipeEditView: View {
             Text("Notes")
                 .font(.headline)
 
-            TextEditor(text: $recipe.notes)
-                .frame(minHeight: 100)
-                .border(Color.gray.opacity(0.2), width: 1)
-                .cornerRadius(4)
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $recipe.notes)
+                    .frame(minHeight: 100)
+                    .padding(8)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+            }
         }
         #else
         Section("Notes") {
