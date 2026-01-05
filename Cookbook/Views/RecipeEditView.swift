@@ -19,16 +19,35 @@ struct RecipeEditView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                imageSection
-                basicInfoSection
-                timeSection
-                ingredientsSection
-                directionsSection
-                notesSection
+            Group {
+                #if os(macOS)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        imageSection
+                        basicInfoSection
+                        timeSection
+                        ingredientsSection
+                        directionsSection
+                        notesSection
+                    }
+                    .padding()
+                    .frame(minWidth: 500, maxWidth: 700)
+                }
+                #else
+                Form {
+                    imageSection
+                    basicInfoSection
+                    timeSection
+                    ingredientsSection
+                    directionsSection
+                    notesSection
+                }
+                #endif
             }
             .navigationTitle(isNewRecipe ? "New Recipe" : "Edit Recipe")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -53,6 +72,33 @@ struct RecipeEditView: View {
     }
 
     private var imageSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            if let imageData = recipe.imageData,
+               let image = createPlatformImage(from: imageData) {
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 200)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 200)
+                    .frame(maxWidth: .infinity)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.largeTitle)
+                            .foregroundColor(.gray)
+                    )
+            }
+
+            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                Label("Choose Photo", systemImage: "photo.on.rectangle")
+            }
+        }
+        #else
         Section {
             VStack {
                 if let imageData = recipe.imageData,
@@ -78,9 +124,45 @@ struct RecipeEditView: View {
                 }
             }
         }
+        #endif
     }
 
     private var basicInfoSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Basic Information")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Recipe Title", text: $recipe.title)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Source URL", text: $recipe.sourceURL)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Text("Rating")
+                    Spacer()
+                    ForEach(1...5, id: \.self) { star in
+                        Button(action: {
+                            if recipe.rating == star {
+                                recipe.rating = 0
+                            } else {
+                                recipe.rating = star
+                            }
+                        }) {
+                            Image(systemName: star <= recipe.rating ? "star.fill" : "star")
+                                .foregroundColor(star <= recipe.rating ? .yellow : .gray)
+                                .font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                CategoryPicker(selectedCategoryID: $recipe.categoryID)
+            }
+        }
+        #else
         Section("Basic Information") {
             TextField("Recipe Title", text: $recipe.title)
 
@@ -110,16 +192,63 @@ struct RecipeEditView: View {
 
             CategoryPicker(selectedCategoryID: $recipe.categoryID)
         }
+        #endif
     }
 
     private var timeSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Time")
+                .font(.headline)
+
+            VStack(spacing: 8) {
+                DurationPicker(title: "Prep Time", duration: $recipe.prepDuration)
+                DurationPicker(title: "Cook Time", duration: $recipe.cookDuration)
+            }
+        }
+        #else
         Section("Time") {
             DurationPicker(title: "Prep Time", duration: $recipe.prepDuration)
             DurationPicker(title: "Cook Time", duration: $recipe.cookDuration)
         }
+        #endif
     }
 
     private var ingredientsSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Ingredients")
+                .font(.headline)
+
+            VStack(spacing: 8) {
+                ForEach($recipe.ingredients) { $ingredient in
+                    HStack {
+                        TextField("Ingredient", text: $ingredient.text)
+                            .textFieldStyle(.roundedBorder)
+                        Button(action: {
+                            recipe.ingredients.removeAll { $0.id == ingredient.id }
+                        }) {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                HStack {
+                    TextField("Add ingredient", text: $newIngredient)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addIngredient)
+                    Button(action: addIngredient) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newIngredient.isEmpty)
+                }
+            }
+        }
+        #else
         Section("Ingredients") {
             ForEach($recipe.ingredients) { $ingredient in
                 HStack {
@@ -130,6 +259,7 @@ struct RecipeEditView: View {
                         Image(systemName: "minus.circle.fill")
                             .foregroundColor(.red)
                     }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -140,18 +270,66 @@ struct RecipeEditView: View {
                     Image(systemName: "plus.circle.fill")
                         .foregroundColor(.green)
                 }
+                .buttonStyle(.plain)
                 .disabled(newIngredient.isEmpty)
             }
         }
+        #endif
     }
 
     private var directionsSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Directions")
+                .font(.headline)
+
+            VStack(spacing: 8) {
+                ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
+                    if let index = recipe.directions.firstIndex(where: { $0.id == direction.id }) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("\(direction.order + 1).")
+                                .foregroundColor(.secondary)
+                                .frame(width: 20, alignment: .trailing)
+                            TextField("Step", text: $recipe.directions[index].text, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(3...6)
+                            Button(action: {
+                                recipe.directions.removeAll { $0.id == direction.id }
+                                reorderDirections()
+                            }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 8) {
+                    Text("\(recipe.directions.count + 1).")
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, alignment: .trailing)
+                    TextField("Add step", text: $newDirection, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(3...6)
+                        .onSubmit(addDirection)
+                    Button(action: addDirection) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newDirection.isEmpty)
+                }
+            }
+        }
+        #else
         Section("Directions") {
             ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
                 if let index = recipe.directions.firstIndex(where: { $0.id == direction.id }) {
-                    HStack(alignment: .top) {
+                    HStack(alignment: .top, spacing: 8) {
                         Text("\(direction.order + 1).")
                             .foregroundColor(.secondary)
+                            .frame(width: 20, alignment: .trailing)
                         TextField("Step", text: $recipe.directions[index].text, axis: .vertical)
                             .lineLimit(3...6)
                         Button(action: {
@@ -161,13 +339,15 @@ struct RecipeEditView: View {
                             Image(systemName: "minus.circle.fill")
                                 .foregroundColor(.red)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
 
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 8) {
                 Text("\(recipe.directions.count + 1).")
                     .foregroundColor(.secondary)
+                    .frame(width: 20, alignment: .trailing)
                 TextField("Add step", text: $newDirection, axis: .vertical)
                     .lineLimit(3...6)
                     .onSubmit(addDirection)
@@ -175,16 +355,30 @@ struct RecipeEditView: View {
                     Image(systemName: "plus.circle.fill")
                         .foregroundColor(.green)
                 }
+                .buttonStyle(.plain)
                 .disabled(newDirection.isEmpty)
             }
         }
+        #endif
     }
 
     private var notesSection: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Notes")
+                .font(.headline)
+
+            TextEditor(text: $recipe.notes)
+                .frame(minHeight: 100)
+                .border(Color.gray.opacity(0.2), width: 1)
+                .cornerRadius(4)
+        }
+        #else
         Section("Notes") {
             TextEditor(text: $recipe.notes)
                 .frame(minHeight: 100)
         }
+        #endif
     }
     
     private func createPlatformImage(from data: Data) -> Image? {
@@ -239,29 +433,31 @@ struct DurationPicker: View {
         HStack {
             Text(title)
             Spacer()
-            Picker("Hours", selection: Binding(
-                get: { hours },
-                set: { duration = TimeInterval($0 * 3600 + minutes * 60) }
-            )) {
-                ForEach(0..<24) { hour in
-                    Text("\(hour)h").tag(hour)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 70)
-            
-            Picker("Minutes", selection: Binding(
-                get: { minutes },
-                set: { duration = TimeInterval(hours * 3600 + $0 * 60) }
-            )) {
-                ForEach(0..<60, id: \.self) { minute in
-                    if minute % 5 == 0 {
-                        Text("\(minute)m").tag(minute)
+            HStack(spacing: 8) {
+                Picker("Hours", selection: Binding(
+                    get: { hours },
+                    set: { duration = TimeInterval($0 * 3600 + minutes * 60) }
+                )) {
+                    ForEach(0..<24) { hour in
+                        Text("\(hour)h").tag(hour)
                     }
                 }
+                .pickerStyle(.menu)
+                .fixedSize()
+
+                Picker("Minutes", selection: Binding(
+                    get: { minutes },
+                    set: { duration = TimeInterval(hours * 3600 + $0 * 60) }
+                )) {
+                    ForEach(0..<60, id: \.self) { minute in
+                        if minute % 5 == 0 {
+                            Text("\(minute)m").tag(minute)
+                        }
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
             }
-            .pickerStyle(.menu)
-            .frame(width: 70)
         }
     }
 }

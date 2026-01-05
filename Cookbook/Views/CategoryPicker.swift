@@ -207,7 +207,9 @@ struct CategoryEditorView: View {
                 }
             }
             .navigationTitle(category.name.isEmpty ? "New Category" : "Edit Category")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

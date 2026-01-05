@@ -177,7 +177,9 @@ struct RecipeDetailView: View {
                 .padding()
             }
         }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
