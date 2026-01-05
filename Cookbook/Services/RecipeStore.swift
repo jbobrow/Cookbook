@@ -4,20 +4,45 @@ import Combine
 class RecipeStore: ObservableObject {
     @Published var recipes: [Recipe] = []
     @Published var categories: [Category] = []
+    @Published var cookbook: Cookbook
+    @Published var availableCookbooks: [Cookbook] = []
 
     private let fileManager = FileManager.default
-    private var iCloudURL: URL? {
+    private let userDefaults = UserDefaults.standard
+    private let currentCookbookKey = "currentCookbookID"
+
+    private var baseURL: URL? {
         fileManager.url(forUbiquityContainerIdentifier: nil)?
             .appendingPathComponent("Documents")
-            .appendingPathComponent("Recipes")
+            .appendingPathComponent("Cookbooks")
+    }
+
+    private var currentCookbookURL: URL? {
+        guard let baseURL = baseURL else { return nil }
+        return baseURL.appendingPathComponent(cookbook.id.uuidString)
+    }
+
+    private var iCloudURL: URL? {
+        currentCookbookURL?.appendingPathComponent("Recipes")
     }
 
     private var categoriesURL: URL? {
-        iCloudURL?.deletingLastPathComponent().appendingPathComponent("categories.json")
+        currentCookbookURL?.appendingPathComponent("categories.json")
+    }
+
+    private var cookbookMetadataURL: URL? {
+        currentCookbookURL?.appendingPathComponent("cookbook.json")
     }
     
     init() {
+        // Initialize with default cookbook
+        self.cookbook = Cookbook()
+
+        setupBaseDirectory()
+        loadAllCookbooks()
+        loadCurrentCookbook()
         setupiCloudDirectory()
+        loadCookbook()
         loadCategories()
         loadRecipes()
 
@@ -28,6 +53,14 @@ class RecipeStore: ObservableObject {
             name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: nil
         )
+    }
+
+    private func setupBaseDirectory() {
+        guard let url = baseURL else { return }
+
+        if !fileManager.fileExists(atPath: url.path) {
+            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
     }
     
     private func setupiCloudDirectory() {
@@ -40,8 +73,157 @@ class RecipeStore: ObservableObject {
     
     @objc private func iCloudDataChanged() {
         DispatchQueue.main.async {
+            self.loadCookbook()
             self.loadCategories()
             self.loadRecipes()
+        }
+    }
+
+    // MARK: - Cookbook Management
+
+    func loadAllCookbooks() {
+        guard let baseURL = baseURL else { return }
+
+        do {
+            let cookbookDirs = try fileManager.contentsOfDirectory(
+                at: baseURL,
+                includingPropertiesForKeys: nil,
+                options: .skipsHiddenFiles
+            )
+
+            var cookbooks: [Cookbook] = []
+            for dir in cookbookDirs {
+                let metadataURL = dir.appendingPathComponent("cookbook.json")
+                if fileManager.fileExists(atPath: metadataURL.path),
+                   let data = try? Data(contentsOf: metadataURL),
+                   let cookbook = try? JSONDecoder().decode(Cookbook.self, from: data) {
+                    cookbooks.append(cookbook)
+                }
+            }
+
+            // Sort and assign synchronously - don't dispatch to main queue yet
+            availableCookbooks = cookbooks.sorted { $0.name < $1.name }
+        } catch {
+            print("Error loading cookbooks: \(error)")
+            availableCookbooks = []
+        }
+    }
+
+    func loadCurrentCookbook() {
+        // Try to load the saved current cookbook ID
+        if let savedID = userDefaults.string(forKey: currentCookbookKey),
+           let uuid = UUID(uuidString: savedID),
+           let savedCookbook = availableCookbooks.first(where: { $0.id == uuid }) {
+            cookbook = savedCookbook
+            print("Loaded saved cookbook: \(savedCookbook.name)")
+        } else if let firstCookbook = availableCookbooks.first {
+            // Use first available cookbook
+            cookbook = firstCookbook
+            userDefaults.set(firstCookbook.id.uuidString, forKey: currentCookbookKey)
+            print("Loaded first available cookbook: \(firstCookbook.name)")
+        } else {
+            // Only create default cookbook if no cookbooks exist
+            print("No cookbooks found, creating default cookbook")
+            cookbook = Cookbook()
+            createCookbook(cookbook)
+        }
+    }
+
+    func loadCookbook() {
+        guard let url = cookbookMetadataURL else { return }
+
+        guard fileManager.fileExists(atPath: url.path) else {
+            // Create default cookbook if it doesn't exist
+            saveCookbook()
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let loadedCookbook = try JSONDecoder().decode(Cookbook.self, from: data)
+            DispatchQueue.main.async {
+                self.cookbook = loadedCookbook
+            }
+        } catch {
+            print("Error loading cookbook: \(error)")
+        }
+    }
+
+    func saveCookbook() {
+        guard let url = cookbookMetadataURL else { return }
+
+        // Ensure directory exists
+        if let cookbookDir = currentCookbookURL {
+            try? fileManager.createDirectory(at: cookbookDir, withIntermediateDirectories: true)
+        }
+
+        var updatedCookbook = cookbook
+        updatedCookbook.dateModified = Date()
+
+        do {
+            let data = try JSONEncoder().encode(updatedCookbook)
+            try data.write(to: url, options: .atomic)
+            DispatchQueue.main.async {
+                self.cookbook = updatedCookbook
+                // Update in available cookbooks
+                if let index = self.availableCookbooks.firstIndex(where: { $0.id == updatedCookbook.id }) {
+                    self.availableCookbooks[index] = updatedCookbook
+                }
+            }
+        } catch {
+            print("Error saving cookbook: \(error)")
+        }
+    }
+
+    func createCookbook(_ newCookbook: Cookbook) {
+        cookbook = newCookbook
+
+        // Create cookbook directory and save metadata
+        saveCookbook()
+        setupiCloudDirectory()
+
+        // Add to available cookbooks synchronously
+        availableCookbooks.append(newCookbook)
+        availableCookbooks.sort { $0.name < $1.name }
+
+        // Set as current
+        userDefaults.set(newCookbook.id.uuidString, forKey: currentCookbookKey)
+
+        // Reload data for new cookbook
+        loadCategories()
+        loadRecipes()
+    }
+
+    func switchToCookbook(_ targetCookbook: Cookbook) {
+        cookbook = targetCookbook
+        userDefaults.set(targetCookbook.id.uuidString, forKey: currentCookbookKey)
+
+        // Reload all data for the new cookbook
+        loadCookbook()
+        loadCategories()
+        loadRecipes()
+    }
+
+    func deleteCookbook(_ cookbookToDelete: Cookbook) {
+        guard let baseURL = baseURL else { return }
+        let cookbookDir = baseURL.appendingPathComponent(cookbookToDelete.id.uuidString)
+
+        do {
+            try fileManager.removeItem(at: cookbookDir)
+            availableCookbooks.removeAll { $0.id == cookbookToDelete.id }
+
+            // If we deleted the current cookbook, switch to another one
+            if cookbookToDelete.id == cookbook.id {
+                if let firstCookbook = availableCookbooks.first {
+                    switchToCookbook(firstCookbook)
+                } else {
+                    // Create a new default cookbook
+                    let newCookbook = Cookbook()
+                    createCookbook(newCookbook)
+                }
+            }
+        } catch {
+            print("Error deleting cookbook: \(error)")
         }
     }
     

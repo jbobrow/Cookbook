@@ -6,6 +6,8 @@ struct RecipeListView: View {
     @State private var searchText = ""
     @State private var showingAddRecipe = false
     @State private var showingImportSheet = false
+    @State private var showingSettings = false
+    @State private var showingCookbookSwitcher = false
     @State private var importAlert: ImportAlert?
     @State private var recipesToDelete: IndexSet?
     @State private var showingDeleteConfirmation = false
@@ -81,7 +83,7 @@ struct RecipeListView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Search recipes")
-            .navigationTitle("Cookbook")
+            .navigationTitle(store.cookbook.name)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -95,9 +97,39 @@ struct RecipeListView: View {
                         Image(systemName: "plus")
                     }
                 }
+
+                #if os(macOS)
+                ToolbarItem(placement: .navigation) {
+                    HStack(spacing: 12) {
+                        Button(action: { showingCookbookSwitcher = true }) {
+                            Image(systemName: "books.vertical")
+                        }
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape")
+                        }
+                    }
+                }
+                #else
+                ToolbarItem(placement: .topBarLeading) {
+                    HStack(spacing: 12) {
+                        Button(action: { showingCookbookSwitcher = true }) {
+                            Image(systemName: "books.vertical")
+                        }
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape")
+                        }
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showingAddRecipe) {
                 RecipeEditView(recipe: Recipe())
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+            }
+            .sheet(isPresented: $showingCookbookSwitcher) {
+                CookbookSwitcherView()
             }
             .fileImporter(
                 isPresented: $showingImportSheet,
