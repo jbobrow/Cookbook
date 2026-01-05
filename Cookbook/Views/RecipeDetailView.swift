@@ -6,7 +6,15 @@ struct RecipeDetailView: View {
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
     @Environment(\.dismiss) private var dismiss
-    
+
+    private var accentColor: Color {
+        if let categoryID = recipe.categoryID,
+           let category = store.categories.first(where: { $0.id == categoryID }) {
+            return category.color
+        }
+        return .accentColor
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -67,7 +75,7 @@ struct RecipeDetailView: View {
                             Link(destination: url) {
                                 Label("View Source", systemImage: "link")
                                     .font(.subheadline)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(accentColor)
                             }
                         }
                     }
@@ -131,7 +139,7 @@ struct RecipeDetailView: View {
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(width: 28, height: 28)
-                                .background(Circle().fill(Color.accentColor))
+                                .background(Circle().fill(accentColor))
                             
                             Text(direction.text)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -158,11 +166,14 @@ struct RecipeDetailView: View {
                     // Mark as Cooked Button
                     Button(action: markAsCooked) {
                         Label("Mark as Cooked", systemImage: "checkmark.circle")
+                            .font(.title3)
+                            .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor)
+                            .padding(.vertical, 16)
+                            .padding(.horizontal)
+                            .background(accentColor)
                             .foregroundColor(.white)
-                            .cornerRadius(10)
+                            .cornerRadius(12)
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 8)
