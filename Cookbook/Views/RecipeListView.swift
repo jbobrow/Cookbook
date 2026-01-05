@@ -89,16 +89,22 @@ struct RecipeListView: View {
             recipeList
             #if os(iOS)
             .searchable(text: $searchText, prompt: "Search recipes")
+            .navigationTitle(store.cookbook.name)
+            .navigationBarTitleDisplayMode(.inline)
             #else
             .searchable(text: $searchText, placement: .sidebar, prompt: "Search recipes")
-            #endif
             .navigationTitle("")
+            #endif
             .toolbar {
                 #if os(macOS)
                 ToolbarItem(placement: .navigation) {
                     Button(action: { showingCookbookSwitcher = true }) {
                         Image(systemName: "books.vertical")
                     }
+                }
+                ToolbarItem(placement: .navigation) {
+                    CookbookTitleView(cookbookName: store.cookbook.name, showingSettings: $showingSettings)
+                        .padding(.trailing, 8)
                 }
                 #else
                 ToolbarItem(placement: .topBarLeading) {
@@ -108,23 +114,15 @@ struct RecipeListView: View {
                 }
                 #endif
 
+                #if !os(macOS)
                 ToolbarItem(placement: .principal) {
-                    #if os(macOS)
-                    Button(action: { showingSettings = true }) {
-                        Text(store.cookbook.name)
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 12)
-                    }
-                    .buttonStyle(.plain)
-                    #else
                     Button(action: { showingSettings = true }) {
                         Text(store.cookbook.name)
                             .font(.title2)
                             .fontWeight(.semibold)
                     }
-                    #endif
                 }
+                #endif
 
                 ToolbarItem(placement: .automatic) {
                     Menu {
@@ -447,6 +445,33 @@ struct ImportAlert: Identifiable {
     let title: String
     let message: String
 }
+
+#if os(macOS)
+struct CookbookTitleView: View {
+    let cookbookName: String
+    @Binding var showingSettings: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        Text(cookbookName)
+            .font(.title2)
+            .fontWeight(.semibold)
+            .foregroundStyle(isHovered ? Color.accentColor : Color.primary)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                showingSettings = true
+            }
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+#endif
 
 #Preview {
     RecipeListView()

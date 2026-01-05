@@ -181,10 +181,22 @@ struct RecipeDetailView: View {
                 .padding()
             }
         }
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .navigation) {
+                Button(action: { dismiss() }) {
+                    Text(store.cookbook.name)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                }
+                .buttonStyle(.plain)
+            }
+            #endif
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(action: { showingEditSheet = true }) {

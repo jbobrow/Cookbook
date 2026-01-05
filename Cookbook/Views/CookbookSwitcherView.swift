@@ -120,11 +120,16 @@ struct CookbookSwitcherView: View {
         }
 
         #if os(iOS)
+        // Find the topmost presented view controller
         let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first,
            let rootVC = window.rootViewController {
-            rootVC.present(activityVC, animated: true)
+            var topVC = rootVC
+            while let presentedVC = topVC.presentedViewController {
+                topVC = presentedVC
+            }
+            topVC.present(activityVC, animated: true)
         }
         #elseif os(macOS)
         let picker = NSSharingServicePicker(items: [fileURL])
