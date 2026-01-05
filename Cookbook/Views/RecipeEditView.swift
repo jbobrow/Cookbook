@@ -93,10 +93,18 @@ struct RecipeEditView: View {
                 Text("Rating")
                 Spacer()
                 ForEach(1...5, id: \.self) { star in
-                    Button(action: { recipe.rating = star }) {
+                    Button(action: {
+                        if recipe.rating == star {
+                            recipe.rating = 0
+                        } else {
+                            recipe.rating = star
+                        }
+                    }) {
                         Image(systemName: star <= recipe.rating ? "star.fill" : "star")
                             .foregroundColor(star <= recipe.rating ? .yellow : .gray)
+                            .font(.title2)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
