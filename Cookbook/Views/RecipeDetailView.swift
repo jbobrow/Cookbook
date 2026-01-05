@@ -7,9 +7,7 @@ struct RecipeDetailView: View {
     @EnvironmentObject var store: RecipeStore
     @State var recipe: Recipe
     @State private var showingEditSheet = false
-    @State private var showingShareSheet = false
     @State private var showingDeleteConfirmation = false
-    @State private var recipeFileURL: URL?
     @Environment(\.dismiss) private var dismiss
     
     #if os(iOS)
@@ -212,11 +210,6 @@ struct RecipeDetailView: View {
         .sheet(isPresented: $showingEditSheet) {
             RecipeEditView(recipe: recipe)
         }
-        .sheet(isPresented: $showingShareSheet) {
-            if let url = recipeFileURL {
-                ShareSheet(items: [url])
-            }
-        }
         .alert("Delete Recipe", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive, action: deleteRecipe)
@@ -272,17 +265,29 @@ struct RecipeDetailView: View {
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = "\(recipe.title.replacingOccurrences(of: " ", with: "_")).cookbook.json"
         let fileURL = tempDir.appendingPathComponent(fileName)
-        
+
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(recipe)
             try data.write(to: fileURL)
-            
-            recipeFileURL = fileURL
-            showingShareSheet = true
+
+            // Present share sheet
+            #if os(iOS)
+            let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController {
+                rootVC.present(activityVC, animated: true)
+            }
+            #elseif os(macOS)
+            let picker = NSSharingServicePicker(items: [fileURL])
+            if let view = NSApplication.shared.keyWindow?.contentView {
+                picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+            }
+            #endif
         } catch {
-            print("Error creating share file: \(error)")
+            print("Error sharing recipe: \(error)")
         }
     }
     
