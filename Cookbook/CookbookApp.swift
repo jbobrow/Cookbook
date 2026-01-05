@@ -10,7 +10,9 @@ import SwiftUI
 @main
 struct CookbookApp: App {
     @StateObject private var recipeStore = RecipeStore()
+    #if os(macOS)
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -55,6 +57,22 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
             return .light
         case .dark:
             return .dark
+        }
+    }
+}
+
+enum RecipeViewMode: String, CaseIterable, Identifiable {
+    case grid = "Grid"
+    case list = "List"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .grid:
+            return "square.grid.2x2"
+        case .list:
+            return "list.bullet"
         }
     }
 }

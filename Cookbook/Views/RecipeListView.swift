@@ -12,6 +12,9 @@ struct RecipeListView: View {
     @State private var importAlert: ImportAlert?
     @State private var recipesToDelete: IndexSet?
     @State private var showingDeleteConfirmation = false
+    #if os(macOS)
+    @AppStorage("recipeViewMode") private var viewMode: RecipeViewMode = .grid
+    #endif
     
     var filteredRecipes: [Recipe] {
         if searchText.isEmpty {
@@ -75,26 +78,111 @@ struct RecipeListView: View {
                                 .fill(category.color)
                                 .frame(width: 12, height: 12)
                             Text(category.name)
+                                .font(.headline)
+                                .foregroundColor(.primary)
                         }
                     } else if !store.categories.isEmpty {
                         Text("Uncategorized")
+                            .font(.headline)
+                            .foregroundColor(.primary)
                     }
                 }
             }
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            recipeList
-            #if os(iOS)
+    #if os(macOS)
+    private var recipeGrid: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20, pinnedViews: [.sectionHeaders]) {
+                ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
+                    Section {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 16)], spacing: 16) {
+                            ForEach(group.recipes) { recipe in
+                                NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+                                    RecipeCardView(recipe: recipe, showCategory: false)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button(action: { shareRecipe(recipe) }) {
+                                        Label("Share", systemImage: "square.and.arrow.up")
+                                    }
+                                    Button(role: .destructive, action: {
+                                        if let index = filteredRecipes.firstIndex(where: { $0.id == recipe.id }) {
+                                            deleteRecipes(at: IndexSet([index]))
+                                        }
+                                    }) {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    } header: {
+                        if let category = group.category {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(category.color)
+                                    .frame(width: 12, height: 12)
+                                Text(category.name)
+                                    .font(.headline)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.background)
+                        } else if !store.categories.isEmpty {
+                            Text("Uncategorized")
+                                .font(.headline)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.background)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    private var currentView: some View {
+        Group {
+            if viewMode == .grid {
+                recipeGrid
+            } else {
+                recipeList
+            }
+        }
+    }
+
+    private var macOSContent: some View {
+        currentView
+            .searchable(text: $searchText, placement: .sidebar, prompt: "Search recipes")
+            .navigationTitle("")
+    }
+    #endif
+
+    #if os(iOS)
+    private var iOSContent: some View {
+        recipeList
             .searchable(text: $searchText, prompt: "Search recipes")
             .navigationTitle(store.cookbook.name)
             .navigationBarTitleDisplayMode(.inline)
-            #else
-            .searchable(text: $searchText, placement: .sidebar, prompt: "Search recipes")
-            .navigationTitle("")
-            #endif
+    }
+    #endif
+
+    private var mainContent: some View {
+        #if os(macOS)
+        macOSContent
+        #else
+        iOSContent
+        #endif
+    }
+
+    var body: some View {
+        NavigationStack {
+            mainContent
             .toolbar {
                 #if os(macOS)
                 ToolbarItem(placement: .navigation) {
@@ -105,6 +193,16 @@ struct RecipeListView: View {
                 ToolbarItem(placement: .navigation) {
                     CookbookTitleView(cookbookName: store.cookbook.name, showingSettings: $showingSettings)
                         .padding(.trailing, 8)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Picker("View Mode", selection: $viewMode) {
+                        ForEach(RecipeViewMode.allCases) { mode in
+                            Image(systemName: mode.icon)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Switch between grid and list view")
                 }
                 #else
                 ToolbarItem(placement: .topBarLeading) {
@@ -373,11 +471,11 @@ struct RecipeRowView: View {
                             .foregroundColor(.gray)
                     )
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(recipe.title)
                     .font(.headline)
-                
+
                 HStack(spacing: 8) {
                     if showCategory, let category = store.category(for: recipe) {
                         HStack(spacing: 4) {
@@ -406,7 +504,7 @@ struct RecipeRowView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                
+
                 if !recipe.datesCooked.isEmpty {
                     Text("Cooked \(recipe.datesCooked.count) time\(recipe.datesCooked.count == 1 ? "" : "s")")
                         .font(.caption2)
@@ -416,7 +514,7 @@ struct RecipeRowView: View {
         }
         .padding(.vertical, 4)
     }
-    
+
     private func createPlatformImage(from data: Data) -> Image? {
         #if os(iOS)
         guard let uiImage = UIImage(data: data) else { return nil }
@@ -426,7 +524,7 @@ struct RecipeRowView: View {
         return Image(nsImage: nsImage)
         #endif
     }
-    
+
     private func formatTotalTime(prep: TimeInterval, cook: TimeInterval) -> String {
         let total = Int((prep + cook) / 60)
         if total < 60 {
@@ -438,6 +536,101 @@ struct RecipeRowView: View {
         }
     }
 }
+
+#if os(macOS)
+struct RecipeCardView: View {
+    let recipe: Recipe
+    var showCategory: Bool = true
+    @EnvironmentObject var store: RecipeStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Recipe image
+            if let imageData = recipe.imageData,
+               let image = createPlatformImage(from: imageData) {
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 160)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 160)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.largeTitle)
+                            .foregroundColor(.gray)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(recipe.title)
+                    .font(.headline)
+                    .lineLimit(2)
+
+                if showCategory, let category = store.category(for: recipe) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(category.color)
+                            .frame(width: 8, height: 8)
+                        Text(category.name)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    if recipe.rating > 0 {
+                        HStack(spacing: 2) {
+                            ForEach(0..<recipe.rating, id: \.self) { _ in
+                                Image(systemName: "star.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.yellow)
+                            }
+                        }
+                    }
+
+                    if recipe.prepDuration > 0 || recipe.cookDuration > 0 {
+                        Text(formatTotalTime(prep: recipe.prepDuration, cook: recipe.cookDuration))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if !recipe.datesCooked.isEmpty {
+                    Text("Cooked \(recipe.datesCooked.count) time\(recipe.datesCooked.count == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(12)
+        }
+        .background(Color(.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private func createPlatformImage(from data: Data) -> Image? {
+        guard let nsImage = NSImage(data: data) else { return nil }
+        return Image(nsImage: nsImage)
+    }
+
+    private func formatTotalTime(prep: TimeInterval, cook: TimeInterval) -> String {
+        let total = Int((prep + cook) / 60)
+        if total < 60 {
+            return "\(total) min"
+        } else {
+            let hours = total / 60
+            let minutes = total % 60
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+    }
+}
+#endif
 
 // Helper struct for import alerts
 struct ImportAlert: Identifiable {
