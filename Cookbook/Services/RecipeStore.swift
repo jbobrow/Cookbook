@@ -226,6 +226,104 @@ class RecipeStore: ObservableObject {
             print("Error deleting cookbook: \(error)")
         }
     }
+
+    // MARK: - Cookbook Import/Export
+
+    func exportCookbook(_ cookbookToExport: Cookbook) -> URL? {
+        // Create export data
+        let export = CookbookExport(
+            cookbook: cookbookToExport,
+            recipes: recipes,
+            categories: categories
+        )
+
+        // Create temporary file
+        let tempDir = fileManager.temporaryDirectory
+        let fileName = "\(cookbookToExport.name.replacingOccurrences(of: " ", with: "_")).cookbook"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(export)
+            try data.write(to: fileURL, options: .atomic)
+            return fileURL
+        } catch {
+            print("Error exporting cookbook: \(error)")
+            return nil
+        }
+    }
+
+    func importCookbook(from url: URL) -> Result<Cookbook, Error> {
+        do {
+            // Ensure we have access to the file
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let export = try decoder.decode(CookbookExport.self, from: data)
+
+            // Create new cookbook with a new ID to avoid conflicts
+            var newCookbook = export.cookbook
+            newCookbook.id = UUID()
+            newCookbook.dateCreated = Date()
+            newCookbook.dateModified = Date()
+
+            // Create the cookbook
+            createCookbook(newCookbook)
+
+            // Import categories with new IDs, maintaining a mapping
+            var categoryIDMapping: [UUID: UUID] = [:]
+            for category in export.categories {
+                let oldID = category.id
+                let newID = UUID()
+                categoryIDMapping[oldID] = newID
+
+                var newCategory = category
+                newCategory.id = newID
+                saveCategory(newCategory)
+            }
+
+            // Import recipes with new IDs and updated category references
+            for recipe in export.recipes {
+                var newRecipe = recipe
+                newRecipe.id = UUID()
+                newRecipe.dateCreated = Date()
+
+                // Update category reference if it exists
+                if let oldCategoryID = recipe.categoryID,
+                   let newCategoryID = categoryIDMapping[oldCategoryID] {
+                    newRecipe.categoryID = newCategoryID
+                } else {
+                    newRecipe.categoryID = nil
+                }
+
+                // Reset cooking history for imported recipes
+                newRecipe.datesCooked = []
+
+                // Reset checked ingredients
+                newRecipe.ingredients = newRecipe.ingredients.map { ingredient in
+                    var newIngredient = ingredient
+                    newIngredient.isChecked = false
+                    return newIngredient
+                }
+
+                saveRecipe(newRecipe)
+            }
+
+            return .success(newCookbook)
+        } catch {
+            print("Error importing cookbook: \(error)")
+            return .failure(error)
+        }
+    }
     
     func loadRecipes() {
         guard let url = iCloudURL else {

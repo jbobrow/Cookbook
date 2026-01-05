@@ -26,6 +26,44 @@ struct SettingsView: View {
 
             // Content
             Form {
+                Section("Current Cookbook") {
+                    HStack {
+                        TextField("Cookbook Name", text: $cookbookName)
+                            .textFieldStyle(.roundedBorder)
+                        Image(systemName: "pencil")
+                            .foregroundColor(.secondary)
+                            .font(.body)
+                    }
+
+                    HStack {
+                        Text("Recipes")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(store.recipes.count)")
+                    }
+
+                    HStack {
+                        Text("Categories")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(store.categories.count)")
+                    }
+
+                    HStack {
+                        Text("Created")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(store.cookbook.dateCreated, style: .date)
+                    }
+
+                    HStack {
+                        Text("Last Modified")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(store.cookbook.dateModified, style: .date)
+                    }
+                }
+
                 Section {
                     Button(action: {
                         showingCookbookSwitcher = true
@@ -49,10 +87,27 @@ struct SettingsView: View {
                             .foregroundColor(.orange)
                     }
                 }
-
+            }
+            .formStyle(.grouped)
+        }
+        .frame(width: 500, height: 400)
+        .sheet(isPresented: $showingCookbookSwitcher) {
+            CookbookSwitcherView()
+        }
+        .onAppear {
+            cookbookName = store.cookbook.name
+        }
+        #else
+        NavigationStack {
+            Form {
                 Section("Current Cookbook") {
-                    TextField("Cookbook Name", text: $cookbookName)
-                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        TextField("Cookbook Name", text: $cookbookName)
+                            .textInputAutocapitalization(.words)
+                        Image(systemName: "pencil")
+                            .foregroundColor(.secondary)
+                            .font(.body)
+                    }
 
                     HStack {
                         Text("Recipes")
@@ -82,19 +137,7 @@ struct SettingsView: View {
                         Text(store.cookbook.dateModified, style: .date)
                     }
                 }
-            }
-            .formStyle(.grouped)
-        }
-        .frame(width: 500, height: 400)
-        .sheet(isPresented: $showingCookbookSwitcher) {
-            CookbookSwitcherView()
-        }
-        .onAppear {
-            cookbookName = store.cookbook.name
-        }
-        #else
-        NavigationStack {
-            Form {
+
                 Section {
                     Button(action: {
                         showingCookbookSwitcher = true
@@ -115,39 +158,6 @@ struct SettingsView: View {
                     if hasDuplicateNames {
                         Text("⚠️ You have multiple cookbooks with the same name. Consider renaming them for clarity.")
                             .foregroundColor(.orange)
-                    }
-                }
-
-                Section("Current Cookbook") {
-                    TextField("Cookbook Name", text: $cookbookName)
-                        .textInputAutocapitalization(.words)
-
-                    HStack {
-                        Text("Recipes")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.recipes.count)")
-                    }
-
-                    HStack {
-                        Text("Categories")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.categories.count)")
-                    }
-
-                    HStack {
-                        Text("Created")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateCreated, style: .date)
-                    }
-
-                    HStack {
-                        Text("Last Modified")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateModified, style: .date)
                     }
                 }
             }

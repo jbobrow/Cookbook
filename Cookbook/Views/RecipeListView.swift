@@ -6,6 +6,7 @@ struct RecipeListView: View {
     @State private var searchText = ""
     @State private var showingAddRecipe = false
     @State private var showingImportSheet = false
+    @State private var showingImportCookbookSheet = false
     @State private var showingSettings = false
     @State private var showingCookbookSwitcher = false
     @State private var importAlert: ImportAlert?
@@ -49,43 +50,83 @@ struct RecipeListView: View {
         return groups
     }
     
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
-                    Section {
-                        ForEach(group.recipes) { recipe in
-                            NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
-                                RecipeRowView(recipe: recipe, showCategory: false)
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button(action: { shareRecipe(recipe) }) {
-                                    Label("Share", systemImage: "square.and.arrow.up")
-                                }
-                                .tint(.blue)
-                            }
+    private var recipeList: some View {
+        List {
+            ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
+                Section {
+                    ForEach(group.recipes) { recipe in
+                        NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+                            RecipeRowView(recipe: recipe, showCategory: false)
                         }
-                        .onDelete { offsets in
-                            deleteRecipesInSection(at: offsets, in: groupIndex)
-                        }
-                    } header: {
-                        if let category = group.category {
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(category.color)
-                                    .frame(width: 12, height: 12)
-                                Text(category.name)
+                        .swipeActions(edge: .leading) {
+                            Button(action: { shareRecipe(recipe) }) {
+                                Label("Share", systemImage: "square.and.arrow.up")
                             }
-                        } else if !store.categories.isEmpty {
-                            Text("Uncategorized")
+                            .tint(.blue)
                         }
+                    }
+                    .onDelete { offsets in
+                        deleteRecipesInSection(at: offsets, in: groupIndex)
+                    }
+                } header: {
+                    if let category = group.category {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(category.color)
+                                .frame(width: 12, height: 12)
+                            Text(category.name)
+                        }
+                    } else if !store.categories.isEmpty {
+                        Text("Uncategorized")
                     }
                 }
             }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            recipeList
+            #if os(iOS)
             .searchable(text: $searchText, prompt: "Search recipes")
-            .navigationTitle(store.cookbook.name)
+            #else
+            .searchable(text: $searchText, placement: .sidebar, prompt: "Search recipes")
+            #endif
+            .navigationTitle("")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                #if os(macOS)
+                ToolbarItem(placement: .navigation) {
+                    Button(action: { showingCookbookSwitcher = true }) {
+                        Image(systemName: "books.vertical")
+                    }
+                }
+                #else
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: { showingCookbookSwitcher = true }) {
+                        Image(systemName: "books.vertical")
+                    }
+                }
+                #endif
+
+                ToolbarItem(placement: .principal) {
+                    #if os(macOS)
+                    Button(action: { showingSettings = true }) {
+                        Text(store.cookbook.name)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 12)
+                    }
+                    .buttonStyle(.plain)
+                    #else
+                    Button(action: { showingSettings = true }) {
+                        Text(store.cookbook.name)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                    }
+                    #endif
+                }
+
+                ToolbarItem(placement: .automatic) {
                     Menu {
                         Button(action: { showingAddRecipe = true }) {
                             Label("New Recipe", systemImage: "plus")
@@ -93,34 +134,14 @@ struct RecipeListView: View {
                         Button(action: { showingImportSheet = true }) {
                             Label("Import Recipe", systemImage: "square.and.arrow.down")
                         }
+                        Divider()
+                        Button(action: { showingImportCookbookSheet = true }) {
+                            Label("Import Cookbook", systemImage: "book.closed")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
                 }
-
-                #if os(macOS)
-                ToolbarItem(placement: .navigation) {
-                    HStack(spacing: 12) {
-                        Button(action: { showingCookbookSwitcher = true }) {
-                            Image(systemName: "books.vertical")
-                        }
-                        Button(action: { showingSettings = true }) {
-                            Image(systemName: "gearshape")
-                        }
-                    }
-                }
-                #else
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 12) {
-                        Button(action: { showingCookbookSwitcher = true }) {
-                            Image(systemName: "books.vertical")
-                        }
-                        Button(action: { showingSettings = true }) {
-                            Image(systemName: "gearshape")
-                        }
-                    }
-                }
-                #endif
             }
             .sheet(isPresented: $showingAddRecipe) {
                 RecipeEditView(recipe: Recipe())
@@ -137,6 +158,13 @@ struct RecipeListView: View {
                 allowsMultipleSelection: true
             ) { result in
                 handleImport(result: result)
+            }
+            .fileImporter(
+                isPresented: $showingImportCookbookSheet,
+                allowedContentTypes: [UTType(filenameExtension: "cookbook") ?? .json],
+                allowsMultipleSelection: false
+            ) { result in
+                handleCookbookImport(result: result)
             }
             .alert(item: $importAlert) { alert in
                 Alert(
@@ -229,6 +257,35 @@ struct RecipeListView: View {
         }
     }
     
+    private func handleCookbookImport(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+
+            let importResult = store.importCookbook(from: url)
+
+            switch importResult {
+            case .success(let cookbook):
+                importAlert = ImportAlert(
+                    title: "Import Successful",
+                    message: "Successfully imported '\(cookbook.name)' with all its recipes and categories!"
+                )
+            case .failure(let error):
+                importAlert = ImportAlert(
+                    title: "Import Failed",
+                    message: "Could not import cookbook: \(error.localizedDescription)"
+                )
+            }
+
+        case .failure(let error):
+            print("Error selecting file: \(error)")
+            importAlert = ImportAlert(
+                title: "Import Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
     private func handleImport(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):

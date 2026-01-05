@@ -40,6 +40,12 @@ struct CookbookSwitcherView: View {
                     .buttonStyle(.plain)
                     #if os(macOS)
                     .contextMenu {
+                        Button(action: {
+                            shareCookbook(cookbook)
+                        }) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+
                         if store.availableCookbooks.count > 1 {
                             Button(role: .destructive) {
                                 cookbookToDelete = cookbook
@@ -50,6 +56,14 @@ struct CookbookSwitcherView: View {
                         }
                     }
                     #else
+                    .swipeActions(edge: .leading) {
+                        Button(action: {
+                            shareCookbook(cookbook)
+                        }) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.blue)
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         if store.availableCookbooks.count > 1 {
                             Button(role: .destructive) {
@@ -97,6 +111,27 @@ struct CookbookSwitcherView: View {
                 Text("Are you sure you want to delete '\(cookbook.name)'? This will permanently delete all recipes and categories in this cookbook.")
             }
         }
+    }
+
+    private func shareCookbook(_ cookbook: Cookbook) {
+        guard let fileURL = store.exportCookbook(cookbook) else {
+            print("Failed to export cookbook")
+            return
+        }
+
+        #if os(iOS)
+        let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+        #elseif os(macOS)
+        let picker = NSSharingServicePicker(items: [fileURL])
+        if let view = NSApplication.shared.keyWindow?.contentView {
+            picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+        }
+        #endif
     }
 }
 
