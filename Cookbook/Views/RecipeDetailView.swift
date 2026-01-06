@@ -5,6 +5,7 @@ struct RecipeDetailView: View {
     @State var recipe: Recipe
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
+    @State private var animatingCheckmarks: [Int: Bool] = [:]
     @Environment(\.dismiss) private var dismiss
 
     private var accentColor: Color {
@@ -16,8 +17,9 @@ struct RecipeDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                 // Recipe Image (edge-to-edge)
                 if let imageData = recipe.imageData,
                    let image = createPlatformImage(from: imageData) {
@@ -27,6 +29,7 @@ struct RecipeDetailView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 300)
                         .clipped()
+                        .id("top")
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
@@ -36,6 +39,7 @@ struct RecipeDetailView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.gray)
                         )
+                        .id("top")
                 }
 
                 // Content with padding
@@ -102,22 +106,33 @@ struct RecipeDetailView: View {
                     Text("Ingredients")
                         .font(.title2)
                         .bold()
-                    
-                    ForEach($recipe.ingredients) { $ingredient in
+
+                    ForEach(Array($recipe.ingredients.enumerated()), id: \.element.id) { index, $ingredient in
                         Button(action: {
                             ingredient.isChecked.toggle()
                             store.saveRecipe(recipe)
                         }) {
                             HStack(spacing: 12) {
-                                Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(ingredient.isChecked ? .green : .gray)
-                                    .font(.title3)
-                                
+                                ZStack {
+                                    Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(ingredient.isChecked ? .green : .gray)
+                                        .font(.title3)
+
+                                    // Overlay animated checkmark
+                                    if animatingCheckmarks[index] != nil {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.title3)
+                                            .scaleEffect(animatingCheckmarks[index] == true ? 2.5 : 1.0)
+                                            .opacity(animatingCheckmarks[index] == true ? 0.0 : 1.0)
+                                    }
+                                }
+
                                 Text(ingredient.text)
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
-                                
+
                                 Spacer()
                             }
                         }
@@ -164,7 +179,7 @@ struct RecipeDetailView: View {
                 }
                 
                     // Mark as Cooked Button
-                    Button(action: markAsCooked) {
+                    Button(action: { markAsCooked(scrollProxy: proxy) }) {
                         Label("Mark as Cooked", systemImage: "checkmark.circle")
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -179,6 +194,7 @@ struct RecipeDetailView: View {
                     .padding(.top, 8)
                 }
                 .padding()
+                }
             }
         }
         .navigationTitle("")
@@ -254,8 +270,45 @@ struct RecipeDetailView: View {
         }
     }
     
-    private func markAsCooked() {
-        store.addCookedDate(recipe)
+    private func markAsCooked(scrollProxy: ScrollViewProxy) {
+        // Scroll to the top
+        withAnimation(.easeInOut(duration: 0.5)) {
+            scrollProxy.scrollTo("top", anchor: .top)
+        }
+
+        // Wait for scroll to complete, then animate only the checked ingredients
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            // Animate only checkmarks that are currently checked
+            for i in 0..<recipe.ingredients.count {
+                if recipe.ingredients[i].isChecked {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
+                        // Create the overlay at starting state (scale 1.0, opacity 1.0)
+                        animatingCheckmarks[i] = false
+
+                        // Reset the actual checkbox immediately
+                        recipe.ingredients[i].isChecked = false
+
+                        // Start the animation after a tiny delay to ensure the overlay is rendered
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                            withAnimation(.easeIn(duration: 0.4)) {
+                                animatingCheckmarks[i] = true
+                            }
+                        }
+
+                        // Remove from animating set after animation completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                            animatingCheckmarks[i] = nil
+                        }
+                    }
+                }
+            }
+
+            // Save the recipe and add cooked date after all animations
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(recipe.ingredients.count) * 0.1 + 0.6) {
+                store.saveRecipe(recipe)
+                store.addCookedDate(recipe)
+            }
+        }
     }
     
     private func shareRecipe() {
