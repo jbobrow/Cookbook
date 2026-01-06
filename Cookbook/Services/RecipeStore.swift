@@ -6,23 +6,35 @@ class RecipeStore: ObservableObject {
     @Published var categories: [Category] = []
     @Published var cookbook: Cookbook
     @Published var availableCookbooks: [Cookbook] = []
+    @Published var isICloudAvailable: Bool = false
+    @Published var useLocalStorage: Bool = false
 
     private let fileManager = FileManager.default
     private let userDefaults = UserDefaults.standard
     private let currentCookbookKey = "currentCookbookID"
+    private let storagePreferenceKey = "useLocalStorage"
 
     private var baseURL: URL? {
-        // Use visible iCloud Drive Documents folder
-        // The Documents folder inside the ubiquity container is visible in iCloud Drive
-        // On iOS: appears as "iCloud Drive/Cookbook/Cookbooks"
-        // On macOS: appears as "iCloud Drive/Cookbook/Cookbooks"
-        guard let iCloudDriveURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
-            return nil
-        }
+        // Check if user prefers local storage or if iCloud is unavailable
+        if useLocalStorage || !isICloudAvailable {
+            // Use local Documents directory
+            guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                return nil
+            }
+            return documentsURL.appendingPathComponent("Cookbooks")
+        } else {
+            // Use visible iCloud Drive Documents folder
+            // The Documents folder inside the ubiquity container is visible in iCloud Drive
+            // On iOS: appears as "iCloud Drive/Cookbook/Cookbooks"
+            // On macOS: appears as "iCloud Drive/Cookbook/Cookbooks"
+            guard let iCloudDriveURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
+                return nil
+            }
 
-        return iCloudDriveURL
-            .appendingPathComponent("Documents")
-            .appendingPathComponent("Cookbooks")
+            return iCloudDriveURL
+                .appendingPathComponent("Documents")
+                .appendingPathComponent("Cookbooks")
+        }
     }
 
     private var currentCookbookURL: URL? {
@@ -46,6 +58,13 @@ class RecipeStore: ObservableObject {
         // Initialize with default cookbook
         self.cookbook = Cookbook()
 
+        // Load storage preference
+        useLocalStorage = userDefaults.bool(forKey: storagePreferenceKey)
+
+        // Check iCloud availability
+        checkICloudAvailability()
+
+        // Initialize storage (works for both iCloud and local)
         setupBaseDirectory()
         loadAllCookbooks()
         loadCurrentCookbook()
@@ -54,13 +73,33 @@ class RecipeStore: ObservableObject {
         loadCategories()
         loadRecipes()
 
-        // Watch for iCloud changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(iCloudDataChanged),
-            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: nil
-        )
+        // Watch for iCloud changes (only if using iCloud)
+        if !useLocalStorage && isICloudAvailable {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(iCloudDataChanged),
+                name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+                object: nil
+            )
+        }
+    }
+
+    func checkICloudAvailability() {
+        isICloudAvailable = fileManager.url(forUbiquityContainerIdentifier: nil) != nil
+    }
+
+    func enableLocalStorage() {
+        useLocalStorage = true
+        userDefaults.set(true, forKey: storagePreferenceKey)
+
+        // Reload data from local storage
+        setupBaseDirectory()
+        loadAllCookbooks()
+        loadCurrentCookbook()
+        setupiCloudDirectory()
+        loadCookbook()
+        loadCategories()
+        loadRecipes()
     }
 
     private func setupBaseDirectory() {

@@ -12,10 +12,19 @@ struct RecipeListView: View {
     @State private var importAlert: ImportAlert?
     @State private var recipesToDelete: IndexSet?
     @State private var showingDeleteConfirmation = false
-    #if os(macOS)
     @AppStorage("recipeViewMode") private var viewMode: RecipeViewMode = .grid
-    #endif
-    
+
+    // Check if device is iPad or Mac (grid view enabled)
+    private var isGridCapable: Bool {
+        #if os(macOS)
+        return true
+        #elseif os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return false
+        #endif
+    }
+
     var filteredRecipes: [Recipe] {
         if searchText.isEmpty {
             return store.recipes
@@ -91,7 +100,6 @@ struct RecipeListView: View {
         }
     }
 
-    #if os(macOS)
     private var recipeGrid: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20, pinnedViews: [.sectionHeaders]) {
@@ -148,7 +156,7 @@ struct RecipeListView: View {
 
     private var currentView: some View {
         Group {
-            if viewMode == .grid {
+            if isGridCapable && viewMode == .grid {
                 recipeGrid
             } else {
                 recipeList
@@ -156,6 +164,7 @@ struct RecipeListView: View {
         }
     }
 
+    #if os(macOS)
     private var macOSContent: some View {
         currentView
             .searchable(text: $searchText, placement: .sidebar, prompt: "Search recipes")
@@ -165,7 +174,7 @@ struct RecipeListView: View {
 
     #if os(iOS)
     private var iOSContent: some View {
-        recipeList
+        currentView
             .searchable(text: $searchText, prompt: "Search recipes")
             .navigationTitle(store.cookbook.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -182,100 +191,123 @@ struct RecipeListView: View {
 
     var body: some View {
         NavigationStack {
-            mainContent
-            .toolbar {
-                #if os(macOS)
-                ToolbarItem(placement: .navigation) {
-                    Button(action: { showingCookbookSwitcher = true }) {
-                        Image(systemName: "books.vertical")
+            if store.isICloudAvailable || store.useLocalStorage {
+                mainContent
+                    .toolbar {
+                        toolbarContent
                     }
-                }
-                ToolbarItem(placement: .navigation) {
-                    CookbookTitleView(cookbookName: store.cookbook.name, showingSettings: $showingSettings)
-                        .padding(.trailing, 8)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Picker("View Mode", selection: $viewMode) {
-                        ForEach(RecipeViewMode.allCases) { mode in
-                            Image(systemName: mode.icon)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .help("Switch between grid and list view")
-                }
-                #else
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: { showingCookbookSwitcher = true }) {
-                        Image(systemName: "books.vertical")
-                    }
-                }
-                #endif
+            } else {
+                ICloudSetupView()
+            }
+        }
+        .sheet(isPresented: $showingAddRecipe) {
+            RecipeEditView(recipe: Recipe())
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+        .sheet(isPresented: $showingCookbookSwitcher) {
+            CookbookSwitcherView()
+        }
+        .fileImporter(
+            isPresented: $showingImportSheet,
+            allowedContentTypes: [.json, UTType(filenameExtension: "cookbook.json") ?? .json],
+            allowsMultipleSelection: true
+        ) { result in
+            handleImport(result: result)
+        }
+        .fileImporter(
+            isPresented: $showingImportCookbookSheet,
+            allowedContentTypes: [UTType(filenameExtension: "cookbook") ?? .json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleCookbookImport(result: result)
+        }
+        .alert(item: $importAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert("Delete Recipe\(deleteCount > 1 ? "s" : "")", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {
+                recipesToDelete = nil
+            }
+            Button("Delete", role: .destructive, action: confirmDelete)
+        } message: {
+            Text(deleteMessage)
+        }
+    }
 
-                #if !os(macOS)
-                ToolbarItem(placement: .principal) {
-                    Button(action: { showingSettings = true }) {
-                        Text(store.cookbook.name)
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                    }
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        #if os(macOS)
+        ToolbarItem(placement: .navigation) {
+            Button(action: { showingCookbookSwitcher = true }) {
+                Image(systemName: "books.vertical")
+            }
+        }
+        ToolbarItem(placement: .navigation) {
+            CookbookTitleView(cookbookName: store.cookbook.name, showingSettings: $showingSettings)
+                .padding(.trailing, 8)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Picker("View Mode", selection: $viewMode) {
+                ForEach(RecipeViewMode.allCases) { mode in
+                    Image(systemName: mode.icon)
+                        .tag(mode)
                 }
-                #endif
+            }
+            .pickerStyle(.segmented)
+            .help("Switch between grid and list view")
+        }
+        #else
+        ToolbarItem(placement: .topBarLeading) {
+            Button(action: { showingCookbookSwitcher = true }) {
+                Image(systemName: "books.vertical")
+            }
+        }
+        #endif
 
-                ToolbarItem(placement: .automatic) {
-                    Menu {
-                        Button(action: { showingAddRecipe = true }) {
-                            Label("New Recipe", systemImage: "plus")
-                        }
-                        Button(action: { showingImportSheet = true }) {
-                            Label("Import Recipe", systemImage: "square.and.arrow.down")
-                        }
-                        Divider()
-                        Button(action: { showingImportCookbookSheet = true }) {
-                            Label("Import Cookbook", systemImage: "book.closed")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
+        #if !os(macOS)
+        ToolbarItem(placement: .principal) {
+            Button(action: { showingSettings = true }) {
+                Text(store.cookbook.name)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
+        }
+        #endif
+
+        #if os(iOS)
+        if isGridCapable {
+            ToolbarItem(placement: .topBarTrailing) {
+                Picker("View Mode", selection: $viewMode) {
+                    ForEach(RecipeViewMode.allCases) { mode in
+                        Image(systemName: mode.icon)
+                            .tag(mode)
                     }
                 }
+                .pickerStyle(.segmented)
             }
-            .sheet(isPresented: $showingAddRecipe) {
-                RecipeEditView(recipe: Recipe())
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView()
-            }
-            .sheet(isPresented: $showingCookbookSwitcher) {
-                CookbookSwitcherView()
-            }
-            .fileImporter(
-                isPresented: $showingImportSheet,
-                allowedContentTypes: [.json, UTType(filenameExtension: "cookbook.json") ?? .json],
-                allowsMultipleSelection: true
-            ) { result in
-                handleImport(result: result)
-            }
-            .fileImporter(
-                isPresented: $showingImportCookbookSheet,
-                allowedContentTypes: [UTType(filenameExtension: "cookbook") ?? .json],
-                allowsMultipleSelection: false
-            ) { result in
-                handleCookbookImport(result: result)
-            }
-            .alert(item: $importAlert) { alert in
-                Alert(
-                    title: Text(alert.title),
-                    message: Text(alert.message),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-            .alert("Delete Recipe\(deleteCount > 1 ? "s" : "")", isPresented: $showingDeleteConfirmation) {
-                Button("Cancel", role: .cancel) {
-                    recipesToDelete = nil
+        }
+        #endif
+
+        ToolbarItem(placement: .automatic) {
+            Menu {
+                Button(action: { showingAddRecipe = true }) {
+                    Label("New Recipe", systemImage: "plus")
                 }
-                Button("Delete", role: .destructive, action: confirmDelete)
-            } message: {
-                Text(deleteMessage)
+                Button(action: { showingImportSheet = true }) {
+                    Label("Import Recipe", systemImage: "square.and.arrow.down")
+                }
+                Divider()
+                Button(action: { showingImportCookbookSheet = true }) {
+                    Label("Import Cookbook", systemImage: "book.closed")
+                }
+            } label: {
+                Image(systemName: "plus")
             }
         }
     }
@@ -537,7 +569,6 @@ struct RecipeRowView: View {
     }
 }
 
-#if os(macOS)
 struct RecipeCardView: View {
     let recipe: Recipe
     var showCategory: Bool = true
@@ -606,7 +637,11 @@ struct RecipeCardView: View {
             }
             .padding(12)
         }
+        #if os(macOS)
         .background(Color(.controlBackgroundColor))
+        #else
+        .background(Color(.systemBackground))
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -615,8 +650,13 @@ struct RecipeCardView: View {
     }
 
     private func createPlatformImage(from data: Data) -> Image? {
+        #if os(iOS)
+        guard let uiImage = UIImage(data: data) else { return nil }
+        return Image(uiImage: uiImage)
+        #elseif os(macOS)
         guard let nsImage = NSImage(data: data) else { return nil }
         return Image(nsImage: nsImage)
+        #endif
     }
 
     private func formatTotalTime(prep: TimeInterval, cook: TimeInterval) -> String {
@@ -630,7 +670,6 @@ struct RecipeCardView: View {
         }
     }
 }
-#endif
 
 // Helper struct for import alerts
 struct ImportAlert: Identifiable {
