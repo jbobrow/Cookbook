@@ -203,9 +203,6 @@ struct RecipeListView: View {
         .sheet(isPresented: $showingAddRecipe) {
             RecipeEditView(recipe: Recipe())
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
         .sheet(isPresented: $showingCookbookSwitcher) {
             CookbookSwitcherView()
         }
@@ -270,12 +267,17 @@ struct RecipeListView: View {
         }
         #endif
 
-        #if !os(macOS)
+        #if os(iOS)
         ToolbarItem(placement: .principal) {
             Button(action: { showingSettings = true }) {
                 Text(store.cookbook.name)
                     .font(.title2)
                     .fontWeight(.semibold)
+            }
+            .popover(isPresented: $showingSettings) {
+                SettingsView()
+                    .presentationCompactAdaptation(.popover)
+                    .frame(width: 350)
             }
         }
         #endif
@@ -683,6 +685,7 @@ struct CookbookTitleView: View {
     let cookbookName: String
     @Binding var showingSettings: Bool
     @State private var isHovered = false
+    @EnvironmentObject var store: RecipeStore
 
     var body: some View {
         Text(cookbookName)
@@ -692,6 +695,10 @@ struct CookbookTitleView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 showingSettings = true
+            }
+            .popover(isPresented: $showingSettings) {
+                SettingsView()
+                    .environmentObject(store)
             }
             .onHover { hovering in
                 isHovered = hovering
