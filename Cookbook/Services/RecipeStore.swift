@@ -12,7 +12,15 @@ class RecipeStore: ObservableObject {
     private let currentCookbookKey = "currentCookbookID"
 
     private var baseURL: URL? {
-        fileManager.url(forUbiquityContainerIdentifier: nil)?
+        // Use visible iCloud Drive Documents folder
+        // The Documents folder inside the ubiquity container is visible in iCloud Drive
+        // On iOS: appears as "iCloud Drive/Cookbook/Cookbooks"
+        // On macOS: appears as "iCloud Drive/Cookbook/Cookbooks"
+        guard let iCloudDriveURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
+            return nil
+        }
+
+        return iCloudDriveURL
             .appendingPathComponent("Documents")
             .appendingPathComponent("Cookbooks")
     }
