@@ -19,10 +19,21 @@ struct RecipeDetailView: View {
         return .accentColor
     }
 
+    private func horizontalPadding(for width: CGFloat) -> CGFloat {
+        if width >= 900 {
+            return 80
+        } else if width >= 500 {
+            return 40
+        } else {
+            return 20
+        }
+    }
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
                 // Recipe Image (edge-to-edge)
                 if let imageData = recipe.imageData,
                    let image = createPlatformImage(from: imageData) {
@@ -244,7 +255,11 @@ struct RecipeDetailView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 8)
                 }
-                .padding()
+                .padding(.vertical)
+                .padding(.horizontal, horizontalPadding(for: geometry.size.width))
+                .frame(maxWidth: 900)
+                .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
