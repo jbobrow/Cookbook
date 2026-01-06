@@ -13,6 +13,9 @@ struct RecipeListView: View {
     @State private var recipesToDelete: IndexSet?
     @State private var showingDeleteConfirmation = false
     @AppStorage("recipeViewMode") private var viewMode: RecipeViewMode = .grid
+    #if os(macOS)
+    @Environment(\.textSizeMultiplier) private var textSizeMultiplier
+    #endif
 
     // Check if device is iPad or Mac (grid view enabled)
     private var isGridCapable: Bool {
@@ -485,6 +488,9 @@ struct RecipeRowView: View {
     let recipe: Recipe
     var showCategory: Bool = true
     @EnvironmentObject var store: RecipeStore
+    #if os(macOS)
+    @Environment(\.textSizeMultiplier) private var textSizeMultiplier
+    #endif
 
     var body: some View {
         HStack(spacing: 12) {
@@ -507,8 +513,13 @@ struct RecipeRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
+                #if os(macOS)
+                Text(recipe.title)
+                    .font(.system(size: 17 * textSizeMultiplier, weight: .semibold))
+                #else
                 Text(recipe.title)
                     .font(.headline)
+                #endif
 
                 HStack(spacing: 8) {
                     if showCategory, let category = store.category(for: recipe) {
@@ -575,6 +586,9 @@ struct RecipeCardView: View {
     let recipe: Recipe
     var showCategory: Bool = true
     @EnvironmentObject var store: RecipeStore
+    #if os(macOS)
+    @Environment(\.textSizeMultiplier) private var textSizeMultiplier
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -598,9 +612,15 @@ struct RecipeCardView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
+                #if os(macOS)
+                Text(recipe.title)
+                    .font(.system(size: 17 * textSizeMultiplier, weight: .semibold))
+                    .lineLimit(2)
+                #else
                 Text(recipe.title)
                     .font(.headline)
                     .lineLimit(2)
+                #endif
 
                 if showCategory, let category = store.category(for: recipe) {
                     HStack(spacing: 4) {

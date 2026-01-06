@@ -7,6 +7,9 @@ struct RecipeDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var animatingCheckmarks: [Int: Bool] = [:]
     @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+    @Environment(\.textSizeMultiplier) private var textSizeMultiplier
+    #endif
 
     private var accentColor: Color {
         if let categoryID = recipe.categoryID,
@@ -46,9 +49,15 @@ struct RecipeDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Title and Rating
                 VStack(alignment: .leading, spacing: 8) {
+                    #if os(macOS)
+                    Text(recipe.title)
+                        .font(.system(size: 34 * textSizeMultiplier))
+                        .bold()
+                    #else
                     Text(recipe.title)
                         .font(.largeTitle)
                         .bold()
+                    #endif
                     
                     HStack(spacing: 16) {
                         // Star Rating
@@ -103,9 +112,15 @@ struct RecipeDetailView: View {
                 
                 // Ingredients
                 VStack(alignment: .leading, spacing: 12) {
+                    #if os(macOS)
+                    Text("Ingredients")
+                        .font(.system(size: 22 * textSizeMultiplier))
+                        .bold()
+                    #else
                     Text("Ingredients")
                         .font(.title2)
                         .bold()
+                    #endif
 
                     ForEach(Array($recipe.ingredients.enumerated()), id: \.element.id) { index, $ingredient in
                         Button(action: {
@@ -128,10 +143,18 @@ struct RecipeDetailView: View {
                                     }
                                 }
 
+                                #if os(macOS)
+                                Text(ingredient.text)
+                                    .font(.system(size: 17 * textSizeMultiplier))
+                                    .foregroundColor(.primary)
+                                    .strikethrough(ingredient.isChecked)
+                                    .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                #else
                                 Text(ingredient.text)
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                #endif
 
                                 Spacer()
                             }
@@ -144,21 +167,39 @@ struct RecipeDetailView: View {
                 
                 // Directions
                 VStack(alignment: .leading, spacing: 12) {
+                    #if os(macOS)
+                    Text("Directions")
+                        .font(.system(size: 22 * textSizeMultiplier))
+                        .bold()
+                    #else
                     Text("Directions")
                         .font(.title2)
                         .bold()
+                    #endif
                     
                     ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
                         HStack(alignment: .top, spacing: 12) {
+                            #if os(macOS)
+                            Text("\(direction.order + 1)")
+                                .font(.system(size: 17 * textSizeMultiplier))
+                                .foregroundColor(.white)
+                                .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
+                                .background(Circle().fill(accentColor))
+
+                            Text(direction.text)
+                                .font(.system(size: 17 * textSizeMultiplier))
+                                .fixedSize(horizontal: false, vertical: true)
+                            #else
                             Text("\(direction.order + 1)")
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(width: 28, height: 28)
                                 .background(Circle().fill(accentColor))
-                            
+
                             Text(direction.text)
                                 .fixedSize(horizontal: false, vertical: true)
-                            
+                            #endif
+
                             Spacer()
                         }
                     }
@@ -167,14 +208,24 @@ struct RecipeDetailView: View {
                 // Notes
                 if !recipe.notes.isEmpty {
                     Divider()
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
+                        #if os(macOS)
+                        Text("Notes")
+                            .font(.system(size: 22 * textSizeMultiplier))
+                            .bold()
+
+                        Text(recipe.notes)
+                            .font(.system(size: 17 * textSizeMultiplier))
+                            .foregroundColor(.secondary)
+                        #else
                         Text("Notes")
                             .font(.title2)
                             .bold()
-                        
+
                         Text(recipe.notes)
                             .foregroundColor(.secondary)
+                        #endif
                     }
                 }
                 
