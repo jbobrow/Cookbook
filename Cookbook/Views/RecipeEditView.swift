@@ -4,17 +4,48 @@ import PhotosUI
 struct RecipeEditView: View {
     @EnvironmentObject var store: RecipeStore
     @Environment(\.dismiss) private var dismiss
-    
+
     @State var recipe: Recipe
     @State private var isNewRecipe: Bool
-    
+    @State private var originalRecipe: Recipe
+
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var newIngredient = ""
     @State private var newDirection = ""
-    
+    @State private var showingDiscardAlert = false
+
     init(recipe: Recipe) {
         _recipe = State(initialValue: recipe)
         _isNewRecipe = State(initialValue: recipe.title.isEmpty)
+        _originalRecipe = State(initialValue: recipe)
+    }
+
+    private var hasUnsavedChanges: Bool {
+        // Check if recipe has been modified
+        if recipe.title != originalRecipe.title { return true }
+        if recipe.sourceURL != originalRecipe.sourceURL { return true }
+        if recipe.rating != originalRecipe.rating { return true }
+        if recipe.categoryID != originalRecipe.categoryID { return true }
+        if recipe.prepDuration != originalRecipe.prepDuration { return true }
+        if recipe.cookDuration != originalRecipe.cookDuration { return true }
+        if recipe.notes != originalRecipe.notes { return true }
+        if recipe.imageData != originalRecipe.imageData { return true }
+
+        // Check ingredients
+        if recipe.ingredients.count != originalRecipe.ingredients.count { return true }
+        for (index, ingredient) in recipe.ingredients.enumerated() {
+            if index >= originalRecipe.ingredients.count { return true }
+            if ingredient.text != originalRecipe.ingredients[index].text { return true }
+        }
+
+        // Check directions
+        if recipe.directions.count != originalRecipe.directions.count { return true }
+        for (index, direction) in recipe.directions.enumerated() {
+            if index >= originalRecipe.directions.count { return true }
+            if direction.text != originalRecipe.directions[index].text { return true }
+        }
+
+        return false
     }
     
     var body: some View {
@@ -53,7 +84,7 @@ struct RecipeEditView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        handleCancel()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -73,6 +104,23 @@ struct RecipeEditView: View {
                     }
                 }
             }
+            .interactiveDismissDisabled(hasUnsavedChanges)
+            .alert("Unsaved Changes", isPresented: $showingDiscardAlert) {
+                Button("Discard Changes", role: .destructive) {
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("You have unsaved changes. Are you sure you want to discard them?")
+            }
+        }
+    }
+
+    private func handleCancel() {
+        if hasUnsavedChanges {
+            showingDiscardAlert = true
+        } else {
+            dismiss()
         }
     }
 
