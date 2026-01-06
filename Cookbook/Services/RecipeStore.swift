@@ -515,4 +515,37 @@ class RecipeStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Cookbook Statistics
+
+    func recipeCount(for cookbook: Cookbook) -> Int {
+        guard let baseURL = baseURL else { return 0 }
+        let cookbookDir = baseURL.appendingPathComponent(cookbook.id.uuidString)
+        let recipesDir = cookbookDir.appendingPathComponent("Recipes")
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(
+                at: recipesDir,
+                includingPropertiesForKeys: nil,
+                options: .skipsHiddenFiles
+            ).filter { $0.pathExtension == "json" }
+            return fileURLs.count
+        } catch {
+            return 0
+        }
+    }
+
+    func categoryCount(for cookbook: Cookbook) -> Int {
+        guard let baseURL = baseURL else { return 0 }
+        let cookbookDir = baseURL.appendingPathComponent(cookbook.id.uuidString)
+        let categoriesFile = cookbookDir.appendingPathComponent("categories.json")
+
+        guard fileManager.fileExists(atPath: categoriesFile.path),
+              let data = try? Data(contentsOf: categoriesFile),
+              let loadedCategories = try? JSONDecoder().decode([Category].self, from: data) else {
+            return 0
+        }
+
+        return loadedCategories.count
+    }
 }

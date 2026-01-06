@@ -25,70 +25,72 @@ struct SettingsView: View {
             Divider()
 
             // Content
-            Form {
-                Section("Current Cookbook") {
-                    HStack {
-                        TextField("Cookbook Name", text: $cookbookName)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Cookbook Name")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    HStack(alignment: .center) {
+                        TextField("", text: $cookbookName)
                             .textFieldStyle(.roundedBorder)
-                        Image(systemName: "pencil")
-                            .foregroundColor(.secondary)
-                            .font(.body)
-                    }
 
-                    HStack {
-                        Text("Recipes")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.recipes.count)")
-                    }
-
-                    HStack {
-                        Text("Categories")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.categories.count)")
-                    }
-
-                    HStack {
-                        Text("Created")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateCreated, style: .date)
-                    }
-
-                    HStack {
-                        Text("Last Modified")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateModified, style: .date)
-                    }
-                }
-
-                Section {
-                    Button(action: {
-                        showingCookbookSwitcher = true
-                    }) {
-                        HStack {
-                            Text("Manage Cookbooks")
-                            Spacer()
-                            Text("\(store.availableCookbooks.count) total")
-                                .foregroundColor(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        Button(action: {
+                            // Focus will be handled by tapping the text field
+                        }) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.accentColor)
+                                .font(.system(size: 18))
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                } header: {
-                    Text("Cookbooks")
-                } footer: {
-                    if hasDuplicateNames {
-                        Text("⚠️ You have multiple cookbooks with the same name. Consider renaming them for clarity.")
-                            .foregroundColor(.orange)
+
+                    // Stats below name
+                    HStack(spacing: 16) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.text")
+                            Text("\(store.recipes.count) recipes")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder")
+                            Text("\(store.categories.count) categories")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     }
                 }
+
+                Divider()
+                    .padding(.vertical, 8)
+
+                Button(action: {
+                    showingCookbookSwitcher = true
+                }) {
+                    HStack {
+                        Text("Manage Cookbooks")
+                        Spacer()
+                        Text("\(store.availableCookbooks.count) total")
+                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if hasDuplicateNames {
+                    Text("⚠️ You have multiple cookbooks with the same name. Consider renaming them for clarity.")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.top, 4)
+                }
+
+                Spacer()
             }
-            .formStyle(.grouped)
+            .padding()
         }
         .frame(width: 500, height: 400)
         .sheet(isPresented: $showingCookbookSwitcher) {
@@ -100,42 +102,40 @@ struct SettingsView: View {
         #else
         NavigationStack {
             Form {
-                Section("Current Cookbook") {
-                    HStack {
-                        TextField("Cookbook Name", text: $cookbookName)
-                            .textInputAutocapitalization(.words)
-                        Image(systemName: "pencil")
-                            .foregroundColor(.secondary)
-                            .font(.body)
-                    }
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .center) {
+                            TextField("Cookbook Name", text: $cookbookName)
+                                .textInputAutocapitalization(.words)
 
-                    HStack {
-                        Text("Recipes")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.recipes.count)")
-                    }
+                            Button(action: {
+                                // Focus will be handled by tapping the text field
+                            }) {
+                                Image(systemName: "pencil")
+                                    .foregroundColor(.accentColor)
+                                    .font(.system(size: 18))
+                            }
+                            .buttonStyle(.plain)
+                        }
 
-                    HStack {
-                        Text("Categories")
+                        HStack(spacing: 16) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.text")
+                                Text("\(store.recipes.count) recipes")
+                            }
+                            .font(.caption)
                             .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(store.categories.count)")
-                    }
 
-                    HStack {
-                        Text("Created")
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder")
+                                Text("\(store.categories.count) categories")
+                            }
+                            .font(.caption)
                             .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateCreated, style: .date)
+                        }
                     }
-
-                    HStack {
-                        Text("Last Modified")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(store.cookbook.dateModified, style: .date)
-                    }
+                } header: {
+                    Text("Current Cookbook")
                 }
 
                 Section {
@@ -152,8 +152,6 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                } header: {
-                    Text("Cookbooks")
                 } footer: {
                     if hasDuplicateNames {
                         Text("⚠️ You have multiple cookbooks with the same name. Consider renaming them for clarity.")

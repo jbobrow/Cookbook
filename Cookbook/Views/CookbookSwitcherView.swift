@@ -22,9 +22,23 @@ struct CookbookSwitcherView: View {
                                 Text(cookbook.name)
                                     .font(.headline)
 
-                                Text("Modified \(cookbook.dateModified, style: .date)")
-                                    .font(.caption)
+                                HStack(spacing: 16) {
+                                    let recipeCount = store.recipeCount(for: cookbook)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "book.closed")
+                                        Text("\(recipeCount) \(recipeCount == 1 ? "recipe" : "recipes")")
+                                    }
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
+
+                                    let categoryCount = store.categoryCount(for: cookbook)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "paperclip")
+                                        Text("\(categoryCount) \(categoryCount == 1 ? "category" : "categories")")
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                }
                             }
 
                             Spacer()
@@ -120,8 +134,20 @@ struct CookbookSwitcherView: View {
         }
 
         #if os(iOS)
-        // Find the topmost presented view controller
         let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+
+        // Configure popover presentation for iPad only
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            if let popover = activityVC.popoverPresentationController {
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    popover.sourceView = window
+                    popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                    popover.permittedArrowDirections = []
+                }
+            }
+        }
+
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first,
            let rootVC = window.rootViewController {
