@@ -44,8 +44,10 @@ struct RecipeEditView: View {
                 }
                 #endif
             }
+            #if os(macOS)
             .navigationTitle(isNewRecipe ? "New Recipe" : "Edit Recipe")
-            #if os(iOS)
+            #else
+            .navigationTitle(isNewRecipe ? "New Recipe" : "Edit Recipe")
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
@@ -61,6 +63,9 @@ struct RecipeEditView: View {
                     .disabled(recipe.title.isEmpty)
                 }
             }
+            #if os(macOS)
+            .toolbarTitleDisplayMode(.inline)
+            #endif
             .onChange(of: selectedPhoto) { oldValue, newValue in
                 Task {
                     if let data = try? await newValue?.loadTransferable(type: Data.self) {

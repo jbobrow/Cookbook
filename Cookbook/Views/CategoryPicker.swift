@@ -10,6 +10,30 @@ struct CategoryPicker: View {
 
     var body: some View {
         HStack {
+            #if os(macOS)
+            HStack {
+                Text("Category")
+                    .foregroundColor(.primary)
+                Spacer()
+                Picker("", selection: $selectedCategoryID) {
+                    Text("None").tag(nil as UUID?)
+
+                    Divider()
+
+                    ForEach(store.categories) { category in
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(category.color)
+                                .frame(width: 12, height: 12)
+                            Text(category.name)
+                        }
+                        .tag(category.id as UUID?)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            #else
             Menu {
                 Button(action: { selectedCategoryID = nil }) {
                     Label("None", systemImage: selectedCategoryID == nil ? "checkmark" : "")
@@ -51,6 +75,7 @@ struct CategoryPicker: View {
                         .foregroundColor(.secondary)
                 }
             }
+            #endif
 
             Menu {
                 Button(action: { createNewCategory() }) {
@@ -182,6 +207,54 @@ struct CategoryEditorView: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Category Name")
+                    .font(.headline)
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Color")
+                    .font(.headline)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {
+                    ForEach(colorOptions, id: \.self) { color in
+                        Button(action: { selectedColor = color }) {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(Color.primary, lineWidth: selectedColor.toHex() == color.toHex() ? 3 : 0)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Save") {
+                    saveCategory()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding()
+        .frame(minWidth: 400, minHeight: 300)
+        #else
         NavigationStack {
             Form {
                 Section("Category Name") {
@@ -207,9 +280,7 @@ struct CategoryEditorView: View {
                 }
             }
             .navigationTitle(category.name.isEmpty ? "New Category" : "Edit Category")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -224,6 +295,7 @@ struct CategoryEditorView: View {
                 }
             }
         }
+        #endif
     }
 
     private func saveCategory() {
