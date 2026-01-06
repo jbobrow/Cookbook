@@ -199,6 +199,11 @@ struct RecipeListView: View {
                     .toolbar {
                         toolbarContent
                     }
+                    .background(
+                        Button("", action: { showingAddRecipe = true })
+                            .keyboardShortcut("n", modifiers: .command)
+                            .hidden()
+                    )
             } else {
                 ICloudSetupView()
             }
@@ -208,6 +213,12 @@ struct RecipeListView: View {
         }
         .sheet(isPresented: $showingCookbookSwitcher) {
             CookbookSwitcherView()
+        }
+        .onChange(of: store.shouldShowNewRecipe) { oldValue, newValue in
+            if newValue {
+                showingAddRecipe = true
+                store.shouldShowNewRecipe = false
+            }
         }
         .fileImporter(
             isPresented: $showingImportSheet,

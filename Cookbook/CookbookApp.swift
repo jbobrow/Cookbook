@@ -28,7 +28,7 @@ struct CookbookApp: App {
             #if os(macOS)
             CommandGroup(replacing: .newItem) {
                 Button("New Recipe") {
-                    // This would need to be handled via a published property in RecipeStore
+                    recipeStore.shouldShowNewRecipe = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }

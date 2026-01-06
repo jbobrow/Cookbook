@@ -8,6 +8,7 @@ class RecipeStore: ObservableObject {
     @Published var availableCookbooks: [Cookbook] = []
     @Published var isICloudAvailable: Bool = false
     @Published var useLocalStorage: Bool = false
+    @Published var shouldShowNewRecipe: Bool = false
 
     private let fileManager = FileManager.default
     private let userDefaults = UserDefaults.standard
