@@ -12,6 +12,7 @@ struct RecipeListView: View {
     @State private var importAlert: ImportAlert?
     @State private var recipesToDelete: IndexSet?
     @State private var showingDeleteConfirmation = false
+    @State private var isSearching = false
     @AppStorage("recipeViewMode") private var viewMode: RecipeViewMode = .grid
     #if os(macOS)
     @Environment(\.textSizeMultiplier) private var textSizeMultiplier
@@ -177,10 +178,25 @@ struct RecipeListView: View {
 
     #if os(iOS)
     private var iOSContent: some View {
-        currentView
-            .searchable(text: $searchText, prompt: "Search recipes")
-            .navigationTitle(store.cookbook.name)
-            .navigationBarTitleDisplayMode(.inline)
+        Group {
+            if isGridCapable {
+                if isSearching {
+                    currentView
+                        .searchable(text: $searchText, isPresented: $isSearching, prompt: "Search recipes")
+                        .navigationTitle(store.cookbook.name)
+                        .navigationBarTitleDisplayMode(.inline)
+                } else {
+                    currentView
+                        .navigationTitle(store.cookbook.name)
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+            } else {
+                currentView
+                    .searchable(text: $searchText, prompt: "Search recipes")
+                    .navigationTitle(store.cookbook.name)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
     #endif
 
@@ -297,19 +313,64 @@ struct RecipeListView: View {
         #endif
 
         #if os(iOS)
-        if isGridCapable {
+        if isGridCapable && !isSearching {
             ToolbarItem(placement: .topBarTrailing) {
-                Picker("View Mode", selection: $viewMode) {
-                    ForEach(RecipeViewMode.allCases) { mode in
-                        Image(systemName: mode.icon)
-                            .tag(mode)
+                HStack (spacing: 12) {
+                    Menu {
+                        Button(action: { showingAddRecipe = true }) {
+                            Label("New Recipe", systemImage: "plus")
+                        }
+                        Button(action: { showingImportSheet = true }) {
+                            Label("Import Recipe", systemImage: "square.and.arrow.down")
+                        }
+                        Divider()
+                        Button(action: { showingImportCookbookSheet = true }) {
+                            Label("Import Cookbook", systemImage: "book.closed")
+                        }
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                            .labelStyle(.iconOnly)
+                    }
+                    .menuStyle(.button)
+                
+                    Picker("View Mode", selection: $viewMode) {
+                        ForEach(RecipeViewMode.allCases) { mode in
+                            Image(systemName: mode.icon)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: CGFloat(RecipeViewMode.allCases.count * 48)) // icon-hugging width
+                    .help("Switch between grid and list view")
+                
+                    Button(action: { isSearching.toggle() }) {
+                        Label("Search", systemImage: "magnifyingglass")
+                            .labelStyle(.iconOnly)
                     }
                 }
-                .pickerStyle(.segmented)
+                .fixedSize()
             }
         }
-        #endif
 
+        if !isGridCapable {
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    Button(action: { showingAddRecipe = true }) {
+                        Label("New Recipe", systemImage: "plus")
+                    }
+                    Button(action: { showingImportSheet = true }) {
+                        Label("Import Recipe", systemImage: "square.and.arrow.down")
+                    }
+                    Divider()
+                    Button(action: { showingImportCookbookSheet = true }) {
+                        Label("Import Cookbook", systemImage: "book.closed")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        #else
         ToolbarItem(placement: .automatic) {
             Menu {
                 Button(action: { showingAddRecipe = true }) {
@@ -326,6 +387,7 @@ struct RecipeListView: View {
                 Image(systemName: "plus")
             }
         }
+        #endif
     }
 
     private var deleteCount: Int {
