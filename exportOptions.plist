@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>developer-id</string>
+
+    <key>teamID</key>
+    <string>63KWA2RPU8</string>
+
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <key>destination</key>
+    <string>export</string>
+
+    <!-- For Mac App Store distribution, use these instead:
+    <key>method</key>
+    <string>app-store</string>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>uploadBitcode</key>
+    <false/>
+    -->
+
+    <!-- Signing certificate identity (optional when using automatic) -->
+    <!--
+    <key>signingCertificate</key>
+    <string>Developer ID Application</string>
+    -->
+
+    <!-- Provisioning profile (optional when using automatic) -->
+    <!--
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.jonbobrow.Cookbook</key>
+        <string>Your Provisioning Profile Name or UUID</string>
+    </dict>
+    -->
+</dict>
+</plist>
