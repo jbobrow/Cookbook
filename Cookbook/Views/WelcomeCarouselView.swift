@@ -46,8 +46,22 @@ struct WelcomeCarouselView: View {
                         .tag(index)
                 }
             }
+            #if os(iOS)
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            #endif
+
+            #if os(macOS)
+            // Page indicator for macOS
+            HStack(spacing: 8) {
+                ForEach(0..<pages.count, id: \.self) { index in
+                    Circle()
+                        .fill(index == currentPage ? pages[currentPage].color : Color.secondary.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                }
+            }
+            .padding(.vertical, 12)
+            #endif
 
             // Bottom button
             VStack(spacing: 16) {
