@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct CookbookApp: App {
     @StateObject private var recipeStore = RecipeStore()
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     #if os(macOS)
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("textSizeMultiplier") private var textSizeMultiplier: Double = 1.0
@@ -17,12 +18,20 @@ struct CookbookApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RecipeListView()
-                .environmentObject(recipeStore)
-                #if os(macOS)
-                .preferredColorScheme(appearanceMode.colorScheme)
-                .environment(\.textSizeMultiplier, textSizeMultiplier)
-                #endif
+            if hasSeenWelcome {
+                RecipeListView()
+                    .environmentObject(recipeStore)
+                    #if os(macOS)
+                    .preferredColorScheme(appearanceMode.colorScheme)
+                    .environment(\.textSizeMultiplier, textSizeMultiplier)
+                    #endif
+            } else {
+                WelcomeCarouselView()
+                    #if os(macOS)
+                    .preferredColorScheme(appearanceMode.colorScheme)
+                    .environment(\.textSizeMultiplier, textSizeMultiplier)
+                    #endif
+            }
         }
         .commands {
             #if os(macOS)
