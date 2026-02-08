@@ -10,10 +10,14 @@ import SwiftUI
 @main
 struct CookbookApp: App {
     @StateObject private var recipeStore = RecipeStore()
+    @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("textSizeMultiplier") private var textSizeMultiplier: Double = 1.0
     #endif
+
+    private let appGroupID = "group.com.jonbobrow.Cookbook"
+    private let pendingURLKey = "pendingImportURL"
 
     var body: some Scene {
         WindowGroup {
@@ -26,6 +30,11 @@ struct CookbookApp: App {
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                checkForSharedURL()
+            }
         }
         .commands {
             #if os(macOS)
@@ -71,6 +80,19 @@ struct CookbookApp: App {
             return
         }
         recipeStore.pendingImportURL = urlParam
+    }
+
+    private func checkForSharedURL() {
+        // Check for a URL saved by the Share Extension via App Group
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID),
+              let urlString = sharedDefaults.string(forKey: pendingURLKey) else {
+            return
+        }
+        // Clear it immediately so we don't re-import
+        sharedDefaults.removeObject(forKey: pendingURLKey)
+        sharedDefaults.synchronize()
+
+        recipeStore.pendingImportURL = urlString
     }
 }
 
