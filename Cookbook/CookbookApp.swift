@@ -18,7 +18,7 @@ struct CookbookApp: App {
 
     private let appGroupID = "group.com.jonbobrow.Cookbook"
     private let pendingURLKey = "pendingImportURL"
-    private let pendingRecipeKey = "pendingRecipeJSON"
+    private let pendingRecipesFolder = "PendingRecipes"
 
     var body: some Scene {
         WindowGroup {
@@ -84,49 +84,63 @@ struct CookbookApp: App {
     }
 
     private func checkForSharedURL() {
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else { return }
-
-        // Check for a full recipe saved by the Share Extension inline preview
-        if let recipeData = sharedDefaults.data(forKey: pendingRecipeKey) {
-            sharedDefaults.removeObject(forKey: pendingRecipeKey)
-            sharedDefaults.synchronize()
-            importSharedRecipe(data: recipeData)
-            return
-        }
+        // Import all pending recipes saved by the Share Extension
+        importPendingRecipes()
 
         // Fall back to URL-only import (e.g. from cookbook:// scheme)
-        if let urlString = sharedDefaults.string(forKey: pendingURLKey) {
+        if let sharedDefaults = UserDefaults(suiteName: appGroupID),
+           let urlString = sharedDefaults.string(forKey: pendingURLKey) {
             sharedDefaults.removeObject(forKey: pendingURLKey)
             sharedDefaults.synchronize()
             recipeStore.pendingImportURL = urlString
         }
     }
 
-    private func importSharedRecipe(data: Data) {
-        guard let parsed = try? JSONDecoder().decode(SharedRecipeData.self, from: data) else {
-            return
-        }
+    private func importPendingRecipes() {
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID
+        ) else { return }
 
-        var recipe = Recipe(
-            title: parsed.title,
-            ingredients: parsed.ingredients.map { Ingredient(text: $0) },
-            directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0) },
-            sourceURL: parsed.sourceURL,
-            prepDuration: parsed.prepDuration,
-            cookDuration: parsed.cookDuration,
-            notes: parsed.notes
-        )
+        let folder = containerURL.appendingPathComponent(pendingRecipesFolder)
 
-        recipeStore.saveRecipe(recipe)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: nil
+        ).filter({ $0.pathExtension == "json" }) else { return }
 
-        // Download image in background
-        if let imageURL = parsed.imageURL {
-            Task.detached {
-                if let url = URL(string: imageURL),
-                   let (imageData, _) = try? await URLSession.shared.data(from: url) {
-                    await MainActor.run {
-                        recipe.imageData = imageData
-                        recipeStore.saveRecipe(recipe)
+        let decoder = JSONDecoder()
+
+        for fileURL in files {
+            guard let data = try? Data(contentsOf: fileURL),
+                  let parsed = try? decoder.decode(SharedRecipeData.self, from: data) else {
+                try? FileManager.default.removeItem(at: fileURL)
+                continue
+            }
+
+            // Remove the file immediately so we don't re-import
+            try? FileManager.default.removeItem(at: fileURL)
+
+            var recipe = Recipe(
+                title: parsed.title,
+                ingredients: parsed.ingredients.map { Ingredient(text: $0) },
+                directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0) },
+                sourceURL: parsed.sourceURL,
+                prepDuration: parsed.prepDuration,
+                cookDuration: parsed.cookDuration,
+                notes: parsed.notes
+            )
+
+            recipeStore.saveRecipe(recipe)
+
+            // Download image in background
+            if let imageURL = parsed.imageURL {
+                Task.detached {
+                    if let url = URL(string: imageURL),
+                       let (imageData, _) = try? await URLSession.shared.data(from: url) {
+                        await MainActor.run {
+                            recipe.imageData = imageData
+                            recipeStore.saveRecipe(recipe)
+                        }
                     }
                 }
             }
