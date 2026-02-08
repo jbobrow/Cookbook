@@ -333,14 +333,7 @@ struct RecipeListView: View {
                             Label("New Recipe", systemImage: "plus")
                         }
                         Button(action: { showingURLImport = true }) {
-                            Label("Add from URL", systemImage: "link")
-                        }
-                        Button(action: { showingImportSheet = true }) {
-                            Label("Import Recipe", systemImage: "square.and.arrow.down")
-                        }
-                        Divider()
-                        Button(action: { showingImportCookbookSheet = true }) {
-                            Label("Import Cookbook", systemImage: "book.closed")
+                            Label("Add from URL", systemImage: "square.and.arrow.down")
                         }
                     } label: {
                         Label("Add", systemImage: "plus")
@@ -374,14 +367,7 @@ struct RecipeListView: View {
                         Label("New Recipe", systemImage: "plus")
                     }
                     Button(action: { showingURLImport = true }) {
-                        Label("Add from URL", systemImage: "link")
-                    }
-                    Button(action: { showingImportSheet = true }) {
-                        Label("Import Recipe", systemImage: "square.and.arrow.down")
-                    }
-                    Divider()
-                    Button(action: { showingImportCookbookSheet = true }) {
-                        Label("Import Cookbook", systemImage: "book.closed")
+                        Label("Add from URL", systemImage: "square.and.arrow.down")
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -395,14 +381,7 @@ struct RecipeListView: View {
                     Label("New Recipe", systemImage: "plus")
                 }
                 Button(action: { showingURLImport = true }) {
-                    Label("Add from URL", systemImage: "link")
-                }
-                Button(action: { showingImportSheet = true }) {
-                    Label("Import Recipe", systemImage: "square.and.arrow.down")
-                }
-                Divider()
-                Button(action: { showingImportCookbookSheet = true }) {
-                    Label("Import Cookbook", systemImage: "book.closed")
+                    Label("Add from URL", systemImage: "square.and.arrow.down")
                 }
             } label: {
                 Image(systemName: "plus")
