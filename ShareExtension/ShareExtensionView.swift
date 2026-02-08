@@ -224,6 +224,7 @@ struct ShareExtensionView: View {
                 .padding(.vertical, 14)
         }
         .buttonStyle(.borderedProminent)
+        .tint(Color(red: 40/255, green: 156/255, blue: 255/255))
         .padding(.horizontal)
         .padding(.top, 8)
     }
