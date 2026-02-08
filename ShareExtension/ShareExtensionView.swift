@@ -218,7 +218,7 @@ struct ShareExtensionView: View {
                 viewState = .saved
             }
         } label: {
-            Label("Save to Cookbook", systemImage: "book.closed.fill")
+            Label("Save to Cookbook", systemImage: "book.closed")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
