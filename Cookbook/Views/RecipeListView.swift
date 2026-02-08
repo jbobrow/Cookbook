@@ -7,6 +7,7 @@ struct RecipeListView: View {
     @State private var showingAddRecipe = false
     @State private var showingImportSheet = false
     @State private var showingImportCookbookSheet = false
+    @State private var showingURLImport = false
     @State private var showingSettings = false
     @State private var showingCookbookSwitcher = false
     @State private var importAlert: ImportAlert?
@@ -227,6 +228,17 @@ struct RecipeListView: View {
         .sheet(isPresented: $showingAddRecipe) {
             RecipeEditView(recipe: Recipe())
         }
+        .sheet(isPresented: $showingURLImport) {
+            ImportRecipeFromURLView(initialURL: store.pendingImportURL ?? "")
+                .onDisappear {
+                    store.pendingImportURL = nil
+                }
+        }
+        .onChange(of: store.pendingImportURL) { _, newValue in
+            if newValue != nil {
+                showingURLImport = true
+            }
+        }
         .sheet(isPresented: $showingCookbookSwitcher) {
             CookbookSwitcherView()
         }
@@ -320,6 +332,9 @@ struct RecipeListView: View {
                         Button(action: { showingAddRecipe = true }) {
                             Label("New Recipe", systemImage: "plus")
                         }
+                        Button(action: { showingURLImport = true }) {
+                            Label("Add from URL", systemImage: "link")
+                        }
                         Button(action: { showingImportSheet = true }) {
                             Label("Import Recipe", systemImage: "square.and.arrow.down")
                         }
@@ -358,6 +373,9 @@ struct RecipeListView: View {
                     Button(action: { showingAddRecipe = true }) {
                         Label("New Recipe", systemImage: "plus")
                     }
+                    Button(action: { showingURLImport = true }) {
+                        Label("Add from URL", systemImage: "link")
+                    }
                     Button(action: { showingImportSheet = true }) {
                         Label("Import Recipe", systemImage: "square.and.arrow.down")
                     }
@@ -375,6 +393,9 @@ struct RecipeListView: View {
             Menu {
                 Button(action: { showingAddRecipe = true }) {
                     Label("New Recipe", systemImage: "plus")
+                }
+                Button(action: { showingURLImport = true }) {
+                    Label("Add from URL", systemImage: "link")
                 }
                 Button(action: { showingImportSheet = true }) {
                     Label("Import Recipe", systemImage: "square.and.arrow.down")

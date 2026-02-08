@@ -23,6 +23,9 @@ struct CookbookApp: App {
                 .preferredColorScheme(appearanceMode.colorScheme)
                 .environment(\.textSizeMultiplier, textSizeMultiplier)
                 #endif
+                .onOpenURL { url in
+                    handleIncomingURL(url)
+                }
         }
         .commands {
             #if os(macOS)
@@ -57,6 +60,17 @@ struct CookbookApp: App {
             AppPreferencesView()
         }
         #endif
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        // Handle cookbook://import?url=<encoded-url>
+        guard url.scheme == "cookbook",
+              url.host == "import",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let urlParam = components.queryItems?.first(where: { $0.name == "url" })?.value else {
+            return
+        }
+        recipeStore.pendingImportURL = urlParam
     }
 }
 
