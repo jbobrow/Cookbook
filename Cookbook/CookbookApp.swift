@@ -18,6 +18,7 @@ struct CookbookApp: App {
 
     private let appGroupID = "group.com.jonbobrow.Cookbook"
     private let pendingURLKey = "pendingImportURL"
+    private let pendingRecipeKey = "pendingRecipeJSON"
 
     var body: some Scene {
         WindowGroup {
@@ -83,17 +84,66 @@ struct CookbookApp: App {
     }
 
     private func checkForSharedURL() {
-        // Check for a URL saved by the Share Extension via App Group
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupID),
-              let urlString = sharedDefaults.string(forKey: pendingURLKey) else {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else { return }
+
+        // Check for a full recipe saved by the Share Extension inline preview
+        if let recipeData = sharedDefaults.data(forKey: pendingRecipeKey) {
+            sharedDefaults.removeObject(forKey: pendingRecipeKey)
+            sharedDefaults.synchronize()
+            importSharedRecipe(data: recipeData)
             return
         }
-        // Clear it immediately so we don't re-import
-        sharedDefaults.removeObject(forKey: pendingURLKey)
-        sharedDefaults.synchronize()
 
-        recipeStore.pendingImportURL = urlString
+        // Fall back to URL-only import (e.g. from cookbook:// scheme)
+        if let urlString = sharedDefaults.string(forKey: pendingURLKey) {
+            sharedDefaults.removeObject(forKey: pendingURLKey)
+            sharedDefaults.synchronize()
+            recipeStore.pendingImportURL = urlString
+        }
     }
+
+    private func importSharedRecipe(data: Data) {
+        guard let parsed = try? JSONDecoder().decode(SharedRecipeData.self, from: data) else {
+            return
+        }
+
+        var recipe = Recipe(
+            title: parsed.title,
+            ingredients: parsed.ingredients.map { Ingredient(text: $0) },
+            directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0) },
+            sourceURL: parsed.sourceURL,
+            prepDuration: parsed.prepDuration,
+            cookDuration: parsed.cookDuration,
+            notes: parsed.notes
+        )
+
+        recipeStore.saveRecipe(recipe)
+
+        // Download image in background
+        if let imageURL = parsed.imageURL {
+            Task.detached {
+                if let url = URL(string: imageURL),
+                   let (imageData, _) = try? await URLSession.shared.data(from: url) {
+                    await MainActor.run {
+                        recipe.imageData = imageData
+                        recipeStore.saveRecipe(recipe)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Matches the share extension's RecipeParser.ParsedRecipe for decoding
+private struct SharedRecipeData: Codable {
+    var title: String
+    var ingredients: [String]
+    var directions: [String]
+    var sourceURL: String
+    var imageURL: String?
+    var prepDuration: TimeInterval
+    var cookDuration: TimeInterval
+    var notes: String
 }
 
 enum RecipeViewMode: String, CaseIterable, Identifiable {
