@@ -10,10 +10,15 @@ import SwiftUI
 @main
 struct CookbookApp: App {
     @StateObject private var recipeStore = RecipeStore()
+    @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("textSizeMultiplier") private var textSizeMultiplier: Double = 1.0
     #endif
+
+    private let appGroupID = "group.com.jonbobrow.Cookbook"
+    private let pendingURLKey = "pendingImportURL"
+    private let pendingRecipeKey = "pendingRecipeJSON"
 
     var body: some Scene {
         WindowGroup {
@@ -23,6 +28,14 @@ struct CookbookApp: App {
                 .preferredColorScheme(appearanceMode.colorScheme)
                 .environment(\.textSizeMultiplier, textSizeMultiplier)
                 #endif
+                .onOpenURL { url in
+                    handleIncomingURL(url)
+                }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                checkForSharedURL()
+            }
         }
         .commands {
             #if os(macOS)
@@ -58,6 +71,79 @@ struct CookbookApp: App {
         }
         #endif
     }
+
+    private func handleIncomingURL(_ url: URL) {
+        // Handle cookbook://import?url=<encoded-url>
+        guard url.scheme == "cookbook",
+              url.host == "import",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let urlParam = components.queryItems?.first(where: { $0.name == "url" })?.value else {
+            return
+        }
+        recipeStore.pendingImportURL = urlParam
+    }
+
+    private func checkForSharedURL() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else { return }
+
+        // Check for a full recipe saved by the Share Extension inline preview
+        if let recipeData = sharedDefaults.data(forKey: pendingRecipeKey) {
+            sharedDefaults.removeObject(forKey: pendingRecipeKey)
+            sharedDefaults.synchronize()
+            importSharedRecipe(data: recipeData)
+            return
+        }
+
+        // Fall back to URL-only import (e.g. from cookbook:// scheme)
+        if let urlString = sharedDefaults.string(forKey: pendingURLKey) {
+            sharedDefaults.removeObject(forKey: pendingURLKey)
+            sharedDefaults.synchronize()
+            recipeStore.pendingImportURL = urlString
+        }
+    }
+
+    private func importSharedRecipe(data: Data) {
+        guard let parsed = try? JSONDecoder().decode(SharedRecipeData.self, from: data) else {
+            return
+        }
+
+        var recipe = Recipe(
+            title: parsed.title,
+            ingredients: parsed.ingredients.map { Ingredient(text: $0) },
+            directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0) },
+            sourceURL: parsed.sourceURL,
+            prepDuration: parsed.prepDuration,
+            cookDuration: parsed.cookDuration,
+            notes: parsed.notes
+        )
+
+        recipeStore.saveRecipe(recipe)
+
+        // Download image in background
+        if let imageURL = parsed.imageURL {
+            Task.detached {
+                if let url = URL(string: imageURL),
+                   let (imageData, _) = try? await URLSession.shared.data(from: url) {
+                    await MainActor.run {
+                        recipe.imageData = imageData
+                        recipeStore.saveRecipe(recipe)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Matches the share extension's RecipeParser.ParsedRecipe for decoding
+private struct SharedRecipeData: Codable {
+    var title: String
+    var ingredients: [String]
+    var directions: [String]
+    var sourceURL: String
+    var imageURL: String?
+    var prepDuration: TimeInterval
+    var cookDuration: TimeInterval
+    var notes: String
 }
 
 enum RecipeViewMode: String, CaseIterable, Identifiable {
