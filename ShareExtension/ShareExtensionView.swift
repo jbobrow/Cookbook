@@ -174,8 +174,7 @@ struct ShareExtensionView: View {
                         .padding(.top, 6)
                     Text(ingredient)
                         .font(.subheadline)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
