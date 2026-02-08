@@ -160,11 +160,15 @@ struct RecipeDetailView: View {
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 #else
                                 Text(ingredient.text)
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 #endif
 
                                 Spacer()
@@ -236,6 +240,7 @@ struct RecipeDetailView: View {
 
                         Text(recipe.notes)
                             .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         #endif
                     }
                 }
