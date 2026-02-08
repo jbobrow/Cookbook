@@ -204,15 +204,58 @@ struct RecipeURLImporter {
     // MARK: - HTML Helpers
 
     private static func stripHTML(_ string: String) -> String {
-        string
+        var result = string
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+
+        // Decode numeric HTML entities (decimal &#8217; and hex &#x2019;)
+        if let regex = try? NSRegularExpression(pattern: #"&#x([0-9a-fA-F]+);"#) {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range).reversed()
+            for match in matches {
+                if let hexRange = Range(match.range(at: 1), in: result),
+                   let codePoint = UInt32(result[hexRange], radix: 16),
+                   let scalar = Unicode.Scalar(codePoint) {
+                    let fullRange = Range(match.range, in: result)!
+                    result.replaceSubrange(fullRange, with: String(scalar))
+                }
+            }
+        }
+        if let regex = try? NSRegularExpression(pattern: #"&#(\d+);"#) {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range).reversed()
+            for match in matches {
+                if let decRange = Range(match.range(at: 1), in: result),
+                   let codePoint = UInt32(result[decRange]),
+                   let scalar = Unicode.Scalar(codePoint) {
+                    let fullRange = Range(match.range, in: result)!
+                    result.replaceSubrange(fullRange, with: String(scalar))
+                }
+            }
+        }
+
+        // Decode common named entities
+        result = result
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
             .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&ndash;", with: "\u{2013}")
+            .replacingOccurrences(of: "&mdash;", with: "\u{2014}")
+            .replacingOccurrences(of: "&lsquo;", with: "\u{2018}")
+            .replacingOccurrences(of: "&rsquo;", with: "\u{2019}")
+            .replacingOccurrences(of: "&ldquo;", with: "\u{201C}")
+            .replacingOccurrences(of: "&rdquo;", with: "\u{201D}")
+            .replacingOccurrences(of: "&bull;", with: "\u{2022}")
+            .replacingOccurrences(of: "&deg;", with: "\u{00B0}")
+            .replacingOccurrences(of: "&frac12;", with: "\u{00BD}")
+            .replacingOccurrences(of: "&frac13;", with: "\u{2153}")
+            .replacingOccurrences(of: "&frac14;", with: "\u{00BC}")
+            .replacingOccurrences(of: "&frac34;", with: "\u{00BE}")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return result
     }
 
     // MARK: - Meta Tag Fallback
