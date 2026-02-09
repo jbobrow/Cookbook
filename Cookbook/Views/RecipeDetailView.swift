@@ -357,21 +357,24 @@ struct RecipeDetailView: View {
         } message: {
             Text("Are you sure you want to delete '\(recipe.title)'? This action cannot be undone.")
         }
-        .confirmationDialog(
+        .alert(
             "Add to Reminders",
             isPresented: Binding(
                 get: { ingredientToAddToReminders != nil },
                 set: { if !$0 { ingredientToAddToReminders = nil } }
-            ),
-            titleVisibility: .visible
+            )
         ) {
             if let ingredient = ingredientToAddToReminders {
-                Button("Add \"\(ingredient.text.sanitizedForDisplay)\"") {
+                Button("Add") {
                     addIngredientToReminders(ingredient)
                 }
             }
             Button("Cancel", role: .cancel) {
                 ingredientToAddToReminders = nil
+            }
+        } message: {
+            if let ingredient = ingredientToAddToReminders {
+                Text(ingredient.text.sanitizedForDisplay)
             }
         }
         .alert("Reminders", isPresented: Binding(
