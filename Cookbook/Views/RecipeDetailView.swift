@@ -1,11 +1,13 @@
 import SwiftUI
+import EventKit
 
 struct RecipeDetailView: View {
     @EnvironmentObject var store: RecipeStore
     @State var recipe: Recipe
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
-    @State private var animatingCheckmarks: [Int: Bool] = [:]
+    @State private var ingredientToAddToReminders: Ingredient?
+    @State private var remindersAlertMessage: String?
     @Environment(\.dismiss) private var dismiss
     #if os(macOS)
     @Environment(\.textSizeMultiplier) private var textSizeMultiplier
@@ -31,7 +33,6 @@ struct RecipeDetailView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                 // Recipe Image (edge-to-edge)
@@ -45,7 +46,6 @@ struct RecipeDetailView: View {
                                 .scaledToFill()
                         }
                         .clipped()
-                        .id("top")
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
@@ -55,7 +55,6 @@ struct RecipeDetailView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.gray)
                         )
-                        .id("top")
                 }
 
                 // Content with padding
@@ -135,26 +134,15 @@ struct RecipeDetailView: View {
                         .bold()
                     #endif
 
-                    ForEach(Array($recipe.ingredients.enumerated()), id: \.element.id) { index, $ingredient in
+                    ForEach($recipe.ingredients) { $ingredient in
                         Button(action: {
                             ingredient.isChecked.toggle()
                             store.saveRecipe(recipe)
                         }) {
                             HStack(spacing: 12) {
-                                ZStack {
-                                    Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(ingredient.isChecked ? .green : .gray)
-                                        .font(.title3)
-
-                                    // Overlay animated checkmark
-                                    if animatingCheckmarks[index] != nil {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                            .font(.title3)
-                                            .scaleEffect(animatingCheckmarks[index] == true ? 2.5 : 1.0)
-                                            .opacity(animatingCheckmarks[index] == true ? 0.0 : 1.0)
-                                    }
-                                }
+                                Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(ingredient.isChecked ? .green : .gray)
+                                    .font(.title3)
 
                                 #if os(macOS)
                                 Text(ingredient.text.sanitizedForDisplay)
@@ -173,6 +161,13 @@ struct RecipeDetailView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(action: {
+                                ingredientToAddToReminders = ingredient
+                            }) {
+                                Label("Add to Reminders", systemImage: "list.bullet")
+                            }
+                        }
                     }
                 }
                 
@@ -190,25 +185,53 @@ struct RecipeDetailView: View {
                         .bold()
                     #endif
                     
-                    ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
+                    ForEach($recipe.directions.sorted(by: { $0.wrappedValue.order < $1.wrappedValue.order })) { $direction in
                         HStack(alignment: .top, spacing: 12) {
+                            Button(action: {
+                                direction.isCompleted.toggle()
+                                store.saveRecipe(recipe)
+                            }) {
+                                #if os(macOS)
+                                Group {
+                                    if direction.isCompleted {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14 * textSizeMultiplier, weight: .bold))
+                                            .foregroundColor(accentColor)
+                                            .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
+                                    } else {
+                                        Text("\(direction.order + 1)")
+                                            .font(.system(size: 17 * textSizeMultiplier))
+                                            .foregroundColor(.white)
+                                            .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
+                                            .background(Circle().fill(accentColor))
+                                    }
+                                }
+                                #else
+                                Group {
+                                    if direction.isCompleted {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(accentColor)
+                                            .frame(width: 28, height: 28)
+                                    } else {
+                                        Text("\(direction.order + 1)")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                            .frame(width: 28, height: 28)
+                                            .background(Circle().fill(accentColor))
+                                    }
+                                }
+                                #endif
+                            }
+                            .buttonStyle(.plain)
+
                             #if os(macOS)
-                            Text("\(direction.order + 1)")
-                                .font(.system(size: 17 * textSizeMultiplier))
-                                .foregroundColor(.white)
-                                .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
-                                .background(Circle().fill(accentColor))
-
                             Text(direction.text.sanitizedForDisplay)
                                 .font(.system(size: 17 * textSizeMultiplier))
+                                .foregroundColor(direction.isCompleted ? .secondary : .primary)
                             #else
-                            Text("\(direction.order + 1)")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(accentColor))
-
                             Text(direction.text.sanitizedForDisplay)
+                                .foregroundColor(direction.isCompleted ? .secondary : .primary)
                             #endif
 
                             Spacer()
@@ -242,7 +265,7 @@ struct RecipeDetailView: View {
                 }
                 
                     // Mark as Cooked Button
-                    Button(action: { markAsCooked(scrollProxy: proxy) }) {
+                    Button(action: { markAsCooked() }) {
                         Label("Mark as Cooked", systemImage: "checkmark.circle")
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -262,7 +285,6 @@ struct RecipeDetailView: View {
                 .frame(maxWidth: .infinity)
                     }
                 }
-            }
         }
         .navigationTitle("")
         #if os(iOS)
@@ -309,6 +331,33 @@ struct RecipeDetailView: View {
         } message: {
             Text("Are you sure you want to delete '\(recipe.title)'? This action cannot be undone.")
         }
+        .confirmationDialog(
+            "Add to Reminders",
+            isPresented: Binding(
+                get: { ingredientToAddToReminders != nil },
+                set: { if !$0 { ingredientToAddToReminders = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let ingredient = ingredientToAddToReminders {
+                Button("Add \"\(ingredient.text.sanitizedForDisplay)\"") {
+                    addIngredientToReminders(ingredient)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                ingredientToAddToReminders = nil
+            }
+        }
+        .alert("Reminders", isPresented: Binding(
+            get: { remindersAlertMessage != nil },
+            set: { if !$0 { remindersAlertMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { remindersAlertMessage = nil }
+        } message: {
+            if let message = remindersAlertMessage {
+                Text(message)
+            }
+        }
         .onReceive(store.$recipes) { recipes in
             if let updated = recipes.first(where: { $0.id == recipe.id }) {
                 recipe = updated
@@ -337,47 +386,53 @@ struct RecipeDetailView: View {
         }
     }
     
-    private func markAsCooked(scrollProxy: ScrollViewProxy) {
-        // Scroll to the top
-        withAnimation(.easeInOut(duration: 0.5)) {
-            scrollProxy.scrollTo("top", anchor: .top)
+    private func markAsCooked() {
+        // Reset all ingredient checkmarks
+        for i in 0..<recipe.ingredients.count {
+            recipe.ingredients[i].isChecked = false
         }
 
-        // Wait for scroll to complete, then animate only the checked ingredients
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            // Animate only checkmarks that are currently checked
-            for i in 0..<recipe.ingredients.count {
-                if recipe.ingredients[i].isChecked {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
-                        // Create the overlay at starting state (scale 1.0, opacity 1.0)
-                        animatingCheckmarks[i] = false
+        // Reset all direction completions
+        for i in 0..<recipe.directions.count {
+            recipe.directions[i].isCompleted = false
+        }
 
-                        // Reset the actual checkbox immediately
-                        recipe.ingredients[i].isChecked = false
-
-                        // Start the animation after a tiny delay to ensure the overlay is rendered
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                            withAnimation(.easeIn(duration: 0.4)) {
-                                animatingCheckmarks[i] = true
-                            }
-                        }
-
-                        // Remove from animating set after animation completes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                            animatingCheckmarks[i] = nil
-                        }
-                    }
+        // Save and record cooked date
+        store.addCookedDate(recipe)
+        store.saveRecipe(recipe)
+    }
+    
+    private func addIngredientToReminders(_ ingredient: Ingredient) {
+        let eventStore = EKEventStore()
+        eventStore.requestFullAccessToReminders { granted, error in
+            DispatchQueue.main.async {
+                guard granted, error == nil else {
+                    remindersAlertMessage = "Please allow access to Reminders in Settings."
+                    return
                 }
-            }
 
-            // Save the recipe and add cooked date after all animations
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(recipe.ingredients.count) * 0.1 + 0.6) {
-                store.saveRecipe(recipe)
-                store.addCookedDate(recipe)
+                let reminder = EKReminder(eventStore: eventStore)
+                reminder.title = ingredient.text.sanitizedForDisplay
+
+                // Look for a "Groceries" list, fall back to default
+                let calendars = eventStore.calendars(for: .reminder)
+                if let groceriesList = calendars.first(where: { $0.title.localizedCaseInsensitiveContains("groceries") }) {
+                    reminder.calendar = groceriesList
+                } else {
+                    reminder.calendar = eventStore.defaultCalendarForNewReminders()
+                }
+
+                do {
+                    try eventStore.save(reminder, commit: true)
+                    let listName = reminder.calendar?.title ?? "Reminders"
+                    remindersAlertMessage = "Added to \(listName)."
+                } catch {
+                    remindersAlertMessage = "Failed to add reminder."
+                }
             }
         }
     }
-    
+
     private func shareRecipe() {
         // Create temporary file with .cookbook.json extension
         let tempDir = FileManager.default.temporaryDirectory

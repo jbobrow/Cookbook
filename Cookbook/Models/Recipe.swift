@@ -83,11 +83,13 @@ struct Direction: Identifiable, Codable {
     var id: UUID
     var text: String
     var order: Int
-    
-    init(id: UUID = UUID(), text: String, order: Int) {
+    var isCompleted: Bool
+
+    init(id: UUID = UUID(), text: String, order: Int, isCompleted: Bool = false) {
         self.id = id
         self.text = text
         self.order = order
+        self.isCompleted = isCompleted
     }
 }
 
