@@ -37,11 +37,13 @@ struct RecipeDetailView: View {
                 // Recipe Image (edge-to-edge)
                 if let imageData = recipe.imageData,
                    let image = createPlatformImage(from: imageData) {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
+                    Color.clear
                         .frame(height: 300)
+                        .overlay {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        }
                         .clipped()
                         .id("top")
                 } else {
@@ -259,7 +261,6 @@ struct RecipeDetailView: View {
                 .frame(maxWidth: 900)
                 .frame(maxWidth: .infinity)
                     }
-                    .frame(width: geometry.size.width)
                 }
             }
         }
