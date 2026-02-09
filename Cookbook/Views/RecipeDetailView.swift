@@ -431,8 +431,8 @@ struct RecipeDetailView: View {
             recipe.directions[i].isCompleted = false
         }
 
-        // Save and record cooked date
-        store.addCookedDate(recipe)
+        // Record cooked date and save
+        recipe.datesCooked.append(Date())
         store.saveRecipe(recipe)
 
         // Show confirmation toast
