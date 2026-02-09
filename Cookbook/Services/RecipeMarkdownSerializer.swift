@@ -37,9 +37,9 @@ struct RecipeMarkdownSerializer {
         lines.append("# \(recipe.title)")
         lines.append("")
 
-        // About (notes)
+        // Notes
         if !recipe.notes.isEmpty {
-            lines.append("## About")
+            lines.append("## Notes")
             lines.append("")
             lines.append(recipe.notes)
             lines.append("")
@@ -91,7 +91,7 @@ struct RecipeMarkdownSerializer {
 
         // Parse body sections
         let sections = parseSections(body)
-        let notes = sections["About"] ?? ""
+        let notes = sections["Notes"] ?? sections["About"] ?? ""
         let ingredients = parseIngredients(sections["Ingredients"] ?? "")
         let directions = parseDirections(sections["Directions"] ?? "")
 
@@ -236,7 +236,7 @@ struct RecipeMarkdownSerializer {
 
     // MARK: - Markdown Body Parsing
 
-    private static let knownSections: Set<String> = ["About", "Ingredients", "Directions"]
+    private static let knownSections: Set<String> = ["Notes", "About", "Ingredients", "Directions"]
 
     private static func parseSections(_ body: String) -> [String: String] {
         var sections: [String: String] = [:]
