@@ -48,6 +48,10 @@ class RecipeStore: ObservableObject {
         currentCookbookURL?.appendingPathComponent("Recipes")
     }
 
+    private var imagesURL: URL? {
+        currentCookbookURL?.appendingPathComponent("Images")
+    }
+
     private var categoriesURL: URL? {
         currentCookbookURL?.appendingPathComponent("categories.json")
     }
@@ -114,9 +118,14 @@ class RecipeStore: ObservableObject {
     
     private func setupiCloudDirectory() {
         guard let url = iCloudURL else { return }
-        
+
         if !fileManager.fileExists(atPath: url.path) {
             try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+
+        // Also ensure Images directory exists
+        if let imagesDir = imagesURL, !fileManager.fileExists(atPath: imagesDir.path) {
+            try? fileManager.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         }
     }
     
@@ -279,11 +288,20 @@ class RecipeStore: ObservableObject {
     // MARK: - Cookbook Import/Export
 
     func exportCookbook(_ cookbookToExport: Cookbook) -> URL? {
+        // Collect images for export
+        var images: [String: Data] = [:]
+        for recipe in recipes {
+            if let imageName = recipe.imageName, let imageData = recipe.imageData {
+                images[imageName] = imageData
+            }
+        }
+
         // Create export data
         let export = CookbookExport(
             cookbook: cookbookToExport,
             recipes: recipes,
-            categories: categories
+            categories: categories,
+            images: images
         )
 
         // Create temporary file
@@ -364,6 +382,12 @@ class RecipeStore: ObservableObject {
                     return newIngredient
                 }
 
+                // Restore image data from export images dictionary
+                if let imageName = recipe.imageName, let imageData = export.images[imageName] {
+                    newRecipe.imageData = imageData
+                    newRecipe.imageName = nil  // Will get a new name via saveRecipe
+                }
+
                 saveRecipe(newRecipe)
             }
 
@@ -379,22 +403,44 @@ class RecipeStore: ObservableObject {
             print("iCloud not available")
             return
         }
-        
+
         do {
             let fileURLs = try fileManager.contentsOfDirectory(
                 at: url,
                 includingPropertiesForKeys: nil,
                 options: .skipsHiddenFiles
             ).filter { $0.pathExtension == "json" }
-            
+
             var loadedRecipes: [Recipe] = []
-            
+
             for fileURL in fileURLs {
-                let data = try Data(contentsOf: fileURL)
-                let recipe = try JSONDecoder().decode(Recipe.self, from: data)
-                loadedRecipes.append(recipe)
+                do {
+                    let data = try Data(contentsOf: fileURL)
+                    var recipe = try JSONDecoder().decode(Recipe.self, from: data)
+
+                    // Migration: extract inline imageData to a separate file
+                    if recipe.imageData != nil && recipe.imageName == nil {
+                        let imageName = "\(recipe.id.uuidString).jpg"
+                        if let imageData = recipe.imageData {
+                            saveImageFile(imageData, fileName: imageName)
+                        }
+                        recipe.imageName = imageName
+                        // Re-save JSON without inline imageData
+                        let cleanData = try JSONEncoder().encode(recipe)
+                        try cleanData.write(to: fileURL, options: .atomic)
+                    }
+
+                    // Load image from file if not already in memory
+                    if recipe.imageData == nil, let imageName = recipe.imageName {
+                        recipe.imageData = loadImageFile(fileName: imageName)
+                    }
+
+                    loadedRecipes.append(recipe)
+                } catch {
+                    print("Error loading recipe from \(fileURL.lastPathComponent): \(error)")
+                }
             }
-            
+
             DispatchQueue.main.async {
                 self.recipes = loadedRecipes.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
                 self.cleanupOrphanedCategoryReferences()
@@ -406,18 +452,31 @@ class RecipeStore: ObservableObject {
     
     func saveRecipe(_ recipe: Recipe) {
         guard let url = iCloudURL else { return }
-        
+
         let fileURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
-        
+
         do {
-            let data = try JSONEncoder().encode(recipe)
+            var recipeToSave = recipe
+
+            // Save image to separate file if present
+            if let imageData = recipe.imageData {
+                let imageName = recipe.imageName ?? "\(recipe.id.uuidString).jpg"
+                saveImageFile(imageData, fileName: imageName)
+                recipeToSave.imageName = imageName
+            }
+
+            // Encode recipe (imageData is excluded by custom encoder)
+            let data = try JSONEncoder().encode(recipeToSave)
             try data.write(to: fileURL, options: .atomic)
-            
+
+            // Keep imageData in the in-memory copy
+            recipeToSave.imageData = recipe.imageData
+
             // Update local array
             if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
-                recipes[index] = recipe
+                recipes[index] = recipeToSave
             } else {
-                recipes.append(recipe)
+                recipes.append(recipeToSave)
             }
             recipes.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         } catch {
@@ -427,11 +486,15 @@ class RecipeStore: ObservableObject {
     
     func deleteRecipe(_ recipe: Recipe) {
         guard let url = iCloudURL else { return }
-        
+
         let fileURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
-        
+
         do {
             try fileManager.removeItem(at: fileURL)
+            // Also remove the image file
+            if let imageName = recipe.imageName {
+                deleteImageFile(fileName: imageName)
+            }
             recipes.removeAll { $0.id == recipe.id }
         } catch {
             print("Error deleting recipe: \(error)")
@@ -442,6 +505,31 @@ class RecipeStore: ObservableObject {
         var updatedRecipe = recipe
         updatedRecipe.datesCooked.append(Date())
         saveRecipe(updatedRecipe)
+    }
+
+    // MARK: - Image File Management
+
+    private func saveImageFile(_ data: Data, fileName: String) {
+        guard let imagesDir = imagesURL else { return }
+
+        if !fileManager.fileExists(atPath: imagesDir.path) {
+            try? fileManager.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        }
+
+        let fileURL = imagesDir.appendingPathComponent(fileName)
+        try? data.write(to: fileURL, options: .atomic)
+    }
+
+    private func loadImageFile(fileName: String) -> Data? {
+        guard let imagesDir = imagesURL else { return nil }
+        let fileURL = imagesDir.appendingPathComponent(fileName)
+        return try? Data(contentsOf: fileURL)
+    }
+
+    private func deleteImageFile(fileName: String) {
+        guard let imagesDir = imagesURL else { return }
+        let fileURL = imagesDir.appendingPathComponent(fileName)
+        try? fileManager.removeItem(at: fileURL)
     }
 
     // MARK: - Category Management
