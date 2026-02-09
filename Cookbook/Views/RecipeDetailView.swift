@@ -8,6 +8,7 @@ struct RecipeDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var ingredientToAddToReminders: Ingredient?
     @State private var remindersAlertMessage: String?
+    @State private var showingCookedConfirmation = false
     @Environment(\.dismiss) private var dismiss
     #if os(macOS)
     @Environment(\.textSizeMultiplier) private var textSizeMultiplier
@@ -33,6 +34,8 @@ struct RecipeDetailView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            ZStack {
+            ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                 // Recipe Image (edge-to-edge)
@@ -46,6 +49,7 @@ struct RecipeDetailView: View {
                                 .scaledToFill()
                         }
                         .clipped()
+                        .id("top")
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
@@ -55,6 +59,7 @@ struct RecipeDetailView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(.gray)
                         )
+                        .id("top")
                 }
 
                 // Content with padding
@@ -265,7 +270,7 @@ struct RecipeDetailView: View {
                 }
                 
                     // Mark as Cooked Button
-                    Button(action: { markAsCooked() }) {
+                    Button(action: { markAsCooked(scrollProxy: proxy) }) {
                         Label("Mark as Cooked", systemImage: "checkmark.circle")
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -285,6 +290,24 @@ struct RecipeDetailView: View {
                 .frame(maxWidth: .infinity)
                     }
                 }
+            }
+
+            // "Marked as Cooked" toast overlay
+            if showingCookedConfirmation {
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(accentColor)
+                        .symbolEffect(.bounce, value: showingCookedConfirmation)
+                    Text("Marked as Cooked")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                }
+                .padding(24)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+            }
         }
         .navigationTitle("")
         #if os(iOS)
@@ -386,7 +409,12 @@ struct RecipeDetailView: View {
         }
     }
     
-    private func markAsCooked() {
+    private func markAsCooked(scrollProxy: ScrollViewProxy) {
+        // Scroll to top
+        withAnimation(.easeInOut(duration: 0.4)) {
+            scrollProxy.scrollTo("top", anchor: .top)
+        }
+
         // Reset all ingredient checkmarks
         for i in 0..<recipe.ingredients.count {
             recipe.ingredients[i].isChecked = false
@@ -400,6 +428,16 @@ struct RecipeDetailView: View {
         // Save and record cooked date
         store.addCookedDate(recipe)
         store.saveRecipe(recipe)
+
+        // Show confirmation toast
+        withAnimation(.spring(duration: 0.4)) {
+            showingCookedConfirmation = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showingCookedConfirmation = false
+            }
+        }
     }
     
     private func addIngredientToReminders(_ ingredient: Ingredient) {
