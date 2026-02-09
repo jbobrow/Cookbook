@@ -405,18 +405,47 @@ class RecipeStore: ObservableObject {
         }
 
         do {
-            let fileURLs = try fileManager.contentsOfDirectory(
+            let allFiles = try fileManager.contentsOfDirectory(
                 at: url,
                 includingPropertiesForKeys: nil,
                 options: .skipsHiddenFiles
-            ).filter { $0.pathExtension == "json" }
+            )
+
+            let mdFiles = allFiles.filter { $0.pathExtension == "md" }
+            let jsonFiles = allFiles.filter { $0.pathExtension == "json" }
 
             var loadedRecipes: [Recipe] = []
+            var loadedIDs: Set<UUID> = []
 
-            for fileURL in fileURLs {
+            // Load markdown files (current format)
+            for fileURL in mdFiles {
+                do {
+                    let content = try String(contentsOf: fileURL, encoding: .utf8)
+                    if var recipe = RecipeMarkdownSerializer.deserialize(content) {
+                        // Load image from file if available
+                        if let imageName = recipe.imageName {
+                            recipe.imageData = loadImageFile(fileName: imageName)
+                        }
+                        loadedRecipes.append(recipe)
+                        loadedIDs.insert(recipe.id)
+                    }
+                } catch {
+                    print("Error loading recipe from \(fileURL.lastPathComponent): \(error)")
+                }
+            }
+
+            // Migrate legacy JSON files
+            for fileURL in jsonFiles {
                 do {
                     let data = try Data(contentsOf: fileURL)
                     var recipe = try JSONDecoder().decode(Recipe.self, from: data)
+
+                    // Skip if already loaded from .md
+                    guard !loadedIDs.contains(recipe.id) else {
+                        // Clean up the duplicate JSON file
+                        try? fileManager.removeItem(at: fileURL)
+                        continue
+                    }
 
                     // Migration: extract inline imageData to a separate file
                     if recipe.imageData != nil && recipe.imageName == nil {
@@ -425,10 +454,15 @@ class RecipeStore: ObservableObject {
                             saveImageFile(imageData, fileName: imageName)
                         }
                         recipe.imageName = imageName
-                        // Re-save JSON without inline imageData
-                        let cleanData = try JSONEncoder().encode(recipe)
-                        try cleanData.write(to: fileURL, options: .atomic)
                     }
+
+                    // Write as markdown
+                    let mdURL = url.appendingPathComponent("\(recipe.id.uuidString).md")
+                    let markdown = RecipeMarkdownSerializer.serialize(recipe)
+                    try markdown.write(to: mdURL, atomically: true, encoding: .utf8)
+
+                    // Remove old JSON file
+                    try fileManager.removeItem(at: fileURL)
 
                     // Load image from file if not already in memory
                     if recipe.imageData == nil, let imageName = recipe.imageName {
@@ -436,8 +470,9 @@ class RecipeStore: ObservableObject {
                     }
 
                     loadedRecipes.append(recipe)
+                    loadedIDs.insert(recipe.id)
                 } catch {
-                    print("Error loading recipe from \(fileURL.lastPathComponent): \(error)")
+                    print("Error migrating recipe from \(fileURL.lastPathComponent): \(error)")
                 }
             }
 
@@ -453,7 +488,7 @@ class RecipeStore: ObservableObject {
     func saveRecipe(_ recipe: Recipe) {
         guard let url = iCloudURL else { return }
 
-        let fileURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
+        let fileURL = url.appendingPathComponent("\(recipe.id.uuidString).md")
 
         do {
             var recipeToSave = recipe
@@ -465,9 +500,15 @@ class RecipeStore: ObservableObject {
                 recipeToSave.imageName = imageName
             }
 
-            // Encode recipe (imageData is excluded by custom encoder)
-            let data = try JSONEncoder().encode(recipeToSave)
-            try data.write(to: fileURL, options: .atomic)
+            // Write as markdown
+            let markdown = RecipeMarkdownSerializer.serialize(recipeToSave)
+            try markdown.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            // Remove legacy JSON file if it exists
+            let jsonURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
+            if fileManager.fileExists(atPath: jsonURL.path) {
+                try? fileManager.removeItem(at: jsonURL)
+            }
 
             // Keep imageData in the in-memory copy
             recipeToSave.imageData = recipe.imageData
@@ -487,18 +528,19 @@ class RecipeStore: ObservableObject {
     func deleteRecipe(_ recipe: Recipe) {
         guard let url = iCloudURL else { return }
 
-        let fileURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
+        let mdURL = url.appendingPathComponent("\(recipe.id.uuidString).md")
+        let jsonURL = url.appendingPathComponent("\(recipe.id.uuidString).json")
 
-        do {
-            try fileManager.removeItem(at: fileURL)
-            // Also remove the image file
-            if let imageName = recipe.imageName {
-                deleteImageFile(fileName: imageName)
-            }
-            recipes.removeAll { $0.id == recipe.id }
-        } catch {
-            print("Error deleting recipe: \(error)")
+        // Remove markdown file (current format)
+        try? fileManager.removeItem(at: mdURL)
+        // Remove legacy JSON file if it still exists
+        try? fileManager.removeItem(at: jsonURL)
+
+        // Also remove the image file
+        if let imageName = recipe.imageName {
+            deleteImageFile(fileName: imageName)
         }
+        recipes.removeAll { $0.id == recipe.id }
     }
     
     func addCookedDate(_ recipe: Recipe) {
@@ -618,8 +660,11 @@ class RecipeStore: ObservableObject {
                 at: recipesDir,
                 includingPropertiesForKeys: nil,
                 options: .skipsHiddenFiles
-            ).filter { $0.pathExtension == "json" }
-            return fileURLs.count
+            ).filter { $0.pathExtension == "md" || $0.pathExtension == "json" }
+
+            // Deduplicate by UUID stem (a recipe may exist as both .json and .md during migration)
+            let uniqueIDs = Set(fileURLs.map { $0.deletingPathExtension().lastPathComponent })
+            return uniqueIDs.count
         } catch {
             return 0
         }
