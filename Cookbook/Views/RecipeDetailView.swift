@@ -302,6 +302,9 @@ struct RecipeDetailView: View {
                     Text("Marked as Cooked")
                         .font(.headline)
                         .foregroundColor(.primary)
+                    Text("Reset and ready for next time")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -433,7 +436,7 @@ struct RecipeDetailView: View {
         withAnimation(.spring(duration: 0.4)) {
             showingCookedConfirmation = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             withAnimation(.easeOut(duration: 0.3)) {
                 showingCookedConfirmation = false
             }
