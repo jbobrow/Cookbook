@@ -66,6 +66,7 @@ struct ShareExtensionView: View {
     private func recipePreview(_ recipe: RecipeParser.ParsedRecipe) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+
                 // Header with image and title
                 headerSection(recipe)
 
@@ -101,6 +102,7 @@ struct ShareExtensionView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 20)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -154,7 +156,7 @@ struct ShareExtensionView: View {
             Text(recipe.notes)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal)
     }
@@ -172,6 +174,7 @@ struct ShareExtensionView: View {
                         .padding(.top, 6)
                     Text(ingredient)
                         .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -197,7 +200,7 @@ struct ShareExtensionView: View {
                         .frame(width: 24, alignment: .trailing)
                     Text(direction)
                         .font(.subheadline)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

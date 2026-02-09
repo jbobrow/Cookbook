@@ -248,6 +248,8 @@ struct RecipeParser {
             .replacingOccurrences(of: "&frac13;", with: "\u{2153}")
             .replacingOccurrences(of: "&frac14;", with: "\u{00BC}")
             .replacingOccurrences(of: "&frac34;", with: "\u{00BE}")
+            // Replace non-breaking spaces with regular spaces (prevents SwiftUI wrapping issues)
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return result

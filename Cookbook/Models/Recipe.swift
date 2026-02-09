@@ -90,3 +90,10 @@ struct Direction: Identifiable, Codable {
         self.order = order
     }
 }
+
+extension String {
+    /// Replaces non-breaking spaces with regular spaces so SwiftUI Text can wrap.
+    var sanitizedForDisplay: String {
+        replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+}

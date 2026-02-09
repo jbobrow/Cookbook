@@ -4,7 +4,7 @@ import SwiftUI
 class ShareViewController: UIViewController {
 
     private let appGroupID = "group.com.jonbobrow.Cookbook"
-    private let pendingRecipeKey = "pendingRecipeJSON"
+    private let pendingRecipesFolder = "PendingRecipes"
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -78,11 +78,18 @@ class ShareViewController: UIViewController {
     }
 
     private func saveRecipe(_ recipe: RecipeParser.ParsedRecipe) {
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else { return }
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID
+        ) else { return }
+
+        let folder = containerURL.appendingPathComponent(pendingRecipesFolder)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        let fileName = "\(UUID().uuidString).json"
+        let fileURL = folder.appendingPathComponent(fileName)
 
         if let data = try? JSONEncoder().encode(recipe) {
-            sharedDefaults.set(data, forKey: pendingRecipeKey)
-            sharedDefaults.synchronize()
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
 

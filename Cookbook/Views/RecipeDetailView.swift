@@ -37,11 +37,13 @@ struct RecipeDetailView: View {
                 // Recipe Image (edge-to-edge)
                 if let imageData = recipe.imageData,
                    let image = createPlatformImage(from: imageData) {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
+                    Color.clear
                         .frame(height: 300)
+                        .overlay {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        }
                         .clipped()
                         .id("top")
                 } else {
@@ -155,13 +157,13 @@ struct RecipeDetailView: View {
                                 }
 
                                 #if os(macOS)
-                                Text(ingredient.text)
+                                Text(ingredient.text.sanitizedForDisplay)
                                     .font(.system(size: 17 * textSizeMultiplier))
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
                                 #else
-                                Text(ingredient.text)
+                                Text(ingredient.text.sanitizedForDisplay)
                                     .foregroundColor(.primary)
                                     .strikethrough(ingredient.isChecked)
                                     .opacity(ingredient.isChecked ? 0.6 : 1.0)
@@ -197,9 +199,8 @@ struct RecipeDetailView: View {
                                 .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
                                 .background(Circle().fill(accentColor))
 
-                            Text(direction.text)
+                            Text(direction.text.sanitizedForDisplay)
                                 .font(.system(size: 17 * textSizeMultiplier))
-                                .fixedSize(horizontal: false, vertical: true)
                             #else
                             Text("\(direction.order + 1)")
                                 .font(.headline)
@@ -207,8 +208,7 @@ struct RecipeDetailView: View {
                                 .frame(width: 28, height: 28)
                                 .background(Circle().fill(accentColor))
 
-                            Text(direction.text)
-                                .fixedSize(horizontal: false, vertical: true)
+                            Text(direction.text.sanitizedForDisplay)
                             #endif
 
                             Spacer()
@@ -226,7 +226,7 @@ struct RecipeDetailView: View {
                             .font(.system(size: 22 * textSizeMultiplier))
                             .bold()
 
-                        Text(recipe.notes)
+                        Text(recipe.notes.sanitizedForDisplay)
                             .font(.system(size: 17 * textSizeMultiplier))
                             .foregroundColor(.secondary)
                         #else
@@ -234,8 +234,9 @@ struct RecipeDetailView: View {
                             .font(.title2)
                             .bold()
 
-                        Text(recipe.notes)
+                        Text(recipe.notes.sanitizedForDisplay)
                             .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         #endif
                     }
                 }
