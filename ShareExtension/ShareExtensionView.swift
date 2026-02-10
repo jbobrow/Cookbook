@@ -1,5 +1,13 @@
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+typealias PlatformImage = NSImage
+#else
+import UIKit
+typealias PlatformImage = UIImage
+#endif
+
 struct ShareExtensionView: View {
     let urlString: String
     let onSave: (RecipeParser.ParsedRecipe) -> Void
@@ -20,7 +28,9 @@ struct ShareExtensionView: View {
         NavigationView {
             content
                 .navigationTitle("Import Recipe")
+                #if os(iOS) || os(visionOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { onCancel() }
@@ -108,8 +118,9 @@ struct ShareExtensionView: View {
 
     private func headerSection(_ recipe: RecipeParser.ParsedRecipe) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let imageData, let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
+            if let imageData, let platformImage = PlatformImage(data: imageData) {
+                #if os(macOS)
+                Image(nsImage: platformImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity)
@@ -117,6 +128,16 @@ struct ShareExtensionView: View {
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
+                #else
+                Image(uiImage: platformImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal)
+                #endif
             }
 
             Text(recipe.title)

@@ -668,10 +668,13 @@ struct RecipeCardView: View {
             // Recipe image
             if let imageData = recipe.imageData,
                let image = createPlatformImage(from: imageData) {
-                image
-                    .resizable()
-                    .scaledToFill()
+                Color.clear
                     .frame(height: 160)
+                    .overlay(
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    )
                     .clipped()
             } else {
                 Rectangle()

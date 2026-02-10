@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 struct ImportRecipeFromURLView: View {
     @EnvironmentObject var store: RecipeStore
@@ -8,6 +13,7 @@ struct ImportRecipeFromURLView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var parsedRecipe: RecipeURLImporter.ParsedRecipe?
+    @State private var previewImageData: Data?
 
     init(initialURL: String = "") {
         _urlString = State(initialValue: initialURL)
@@ -138,6 +144,15 @@ struct ImportRecipeFromURLView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Preview")
                 .font(.headline)
+            if let previewImageData, let nsImage = NSImage(data: previewImageData) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
             LabeledContent("Title", value: parsed.title)
             LabeledContent("Ingredients", value: "\(parsed.ingredients.count)")
             LabeledContent("Steps", value: "\(parsed.directions.count)")
@@ -150,6 +165,16 @@ struct ImportRecipeFromURLView: View {
         }
         #else
         Section("Preview") {
+            if let previewImageData, let uiImage = UIImage(data: previewImageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .listRowInsets(EdgeInsets())
+            }
             LabeledContent("Title", value: parsed.title)
             LabeledContent("Ingredients", value: "\(parsed.ingredients.count)")
             LabeledContent("Steps", value: "\(parsed.directions.count)")
@@ -251,12 +276,20 @@ struct ImportRecipeFromURLView: View {
         isLoading = true
         errorMessage = nil
         parsedRecipe = nil
+        previewImageData = nil
 
         Task {
             do {
                 let parsed = try await RecipeURLImporter.importRecipe(from: urlString)
                 parsedRecipe = parsed
                 isLoading = false
+
+                // Load preview image in background
+                if let imageURL = parsed.imageURL {
+                    if let imageData = await RecipeURLImporter.downloadImage(from: imageURL) {
+                        previewImageData = imageData
+                    }
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false
@@ -277,10 +310,14 @@ struct ImportRecipeFromURLView: View {
             notes: parsed.notes
         )
 
+        // Use already-downloaded preview image if available, otherwise fetch in background
+        if let previewImageData {
+            recipe.imageData = previewImageData
+        }
+
         store.saveRecipe(recipe)
 
-        // Download image in background
-        if let imageURL = parsed.imageURL {
+        if previewImageData == nil, let imageURL = parsed.imageURL {
             Task.detached {
                 if let imageData = await RecipeURLImporter.downloadImage(from: imageURL) {
                     await MainActor.run {

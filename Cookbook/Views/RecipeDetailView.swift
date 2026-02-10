@@ -204,7 +204,7 @@ struct RecipeDetailView: View {
                                             .foregroundColor(accentColor)
                                             .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
                                     } else {
-                                        Text("\(direction.order + 1)")
+                                        Text("\(direction.order)")
                                             .font(.system(size: 17 * textSizeMultiplier))
                                             .foregroundColor(.white)
                                             .frame(width: 28 * textSizeMultiplier, height: 28 * textSizeMultiplier)
@@ -219,7 +219,7 @@ struct RecipeDetailView: View {
                                             .foregroundColor(accentColor)
                                             .frame(width: 28, height: 28)
                                     } else {
-                                        Text("\(direction.order + 1)")
+                                        Text("\(direction.order)")
                                             .font(.headline)
                                             .foregroundColor(.white)
                                             .frame(width: 28, height: 28)
