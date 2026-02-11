@@ -63,7 +63,7 @@ struct RecipeParser {
     // MARK: - JSON-LD Parsing
 
     private static func parseJSONLD(html: String, sourceURL: String) -> ParsedRecipe? {
-        let pattern = #"<script[^>]*type\s*=\s*["']application/ld\+json["'][^>]*>([\s\S]*?)</script>"#
+        let pattern = #"<script[^>]*type\s*=\s*["']?application/ld\+json["']?[^>]*>([\s\S]*?)</script>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return nil
         }
@@ -92,6 +92,13 @@ struct RecipeParser {
                 for item in array {
                     if let recipe = extractRecipe(from: item, sourceURL: sourceURL) {
                         return recipe
+                    }
+                    if let graph = item["@graph"] as? [[String: Any]] {
+                        for graphItem in graph {
+                            if let recipe = extractRecipe(from: graphItem, sourceURL: sourceURL) {
+                                return recipe
+                            }
+                        }
                     }
                 }
             }

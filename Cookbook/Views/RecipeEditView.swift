@@ -340,7 +340,7 @@ struct RecipeEditView: View {
                 ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
                     if let index = recipe.directions.firstIndex(where: { $0.id == direction.id }) {
                         HStack(alignment: .top, spacing: 8) {
-                            Text("\(direction.order + 1).")
+                            Text("\(direction.order).")
                                 .foregroundColor(.secondary)
                                 .frame(width: 20, alignment: .trailing)
                             TextField("Step", text: $recipe.directions[index].text, axis: .vertical)
@@ -380,7 +380,7 @@ struct RecipeEditView: View {
             ForEach(recipe.directions.sorted(by: { $0.order < $1.order })) { direction in
                 if let index = recipe.directions.firstIndex(where: { $0.id == direction.id }) {
                     HStack(alignment: .top, spacing: 8) {
-                        Text("\(direction.order + 1).")
+                        Text("\(direction.order).")
                             .foregroundColor(.secondary)
                             .frame(width: 20, alignment: .trailing)
                         TextField("Step", text: $recipe.directions[index].text, axis: .vertical)
@@ -459,14 +459,14 @@ struct RecipeEditView: View {
     
     private func addDirection() {
         guard !newDirection.isEmpty else { return }
-        recipe.directions.append(Direction(text: newDirection, order: recipe.directions.count))
+        recipe.directions.append(Direction(text: newDirection, order: recipe.directions.count + 1))
         newDirection = ""
     }
     
     private func reorderDirections() {
         recipe.directions = recipe.directions.enumerated().map { index, direction in
             var updated = direction
-            updated.order = index
+            updated.order = index + 1
             return updated
         }
     }

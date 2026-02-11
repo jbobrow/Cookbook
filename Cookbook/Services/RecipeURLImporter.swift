@@ -65,7 +65,7 @@ struct RecipeURLImporter {
     // MARK: - JSON-LD Parsing (Schema.org Recipe)
 
     private static func parseJSONLD(html: String, sourceURL: String) -> ParsedRecipe? {
-        let pattern = #"<script[^>]*type\s*=\s*["']application/ld\+json["'][^>]*>([\s\S]*?)</script>"#
+        let pattern = #"<script[^>]*type\s*=\s*["']?application/ld\+json["']?[^>]*>([\s\S]*?)</script>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return nil
         }
@@ -95,6 +95,14 @@ struct RecipeURLImporter {
                 for item in array {
                     if let recipe = extractRecipe(from: item, sourceURL: sourceURL) {
                         return recipe
+                    }
+                    // Check @graph inside array items
+                    if let graph = item["@graph"] as? [[String: Any]] {
+                        for graphItem in graph {
+                            if let recipe = extractRecipe(from: graphItem, sourceURL: sourceURL) {
+                                return recipe
+                            }
+                        }
                     }
                 }
             }

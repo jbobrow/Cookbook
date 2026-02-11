@@ -303,7 +303,7 @@ struct ImportRecipeFromURLView: View {
         var recipe = Recipe(
             title: parsed.title,
             ingredients: parsed.ingredients.map { Ingredient(text: $0) },
-            directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0) },
+            directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0 + 1) },
             sourceURL: parsed.sourceURL,
             prepDuration: parsed.prepDuration,
             cookDuration: parsed.cookDuration,
