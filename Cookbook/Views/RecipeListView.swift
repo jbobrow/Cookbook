@@ -8,6 +8,7 @@ struct RecipeListView: View {
     @State private var showingImportSheet = false
     @State private var showingImportCookbookSheet = false
     @State private var showingURLImport = false
+    @State private var showingScanRecipe = false
     @State private var showingSettings = false
     @State private var showingCookbookSwitcher = false
     @State private var importAlert: ImportAlert?
@@ -234,6 +235,9 @@ struct RecipeListView: View {
                     store.pendingImportURL = nil
                 }
         }
+        .sheet(isPresented: $showingScanRecipe) {
+            ScanRecipeView()
+        }
         .onChange(of: store.pendingImportURL) { _, newValue in
             if newValue != nil {
                 showingURLImport = true
@@ -335,6 +339,9 @@ struct RecipeListView: View {
                         Button(action: { showingURLImport = true }) {
                             Label("Add from URL", systemImage: "square.and.arrow.down")
                         }
+                        Button(action: { showingScanRecipe = true }) {
+                            Label("Scan Recipe", systemImage: "doc.viewfinder")
+                        }
                     } label: {
                         Label("Add", systemImage: "plus")
                             .labelStyle(.iconOnly)
@@ -369,6 +376,9 @@ struct RecipeListView: View {
                     Button(action: { showingURLImport = true }) {
                         Label("Add from URL", systemImage: "square.and.arrow.down")
                     }
+                    Button(action: { showingScanRecipe = true }) {
+                        Label("Scan Recipe", systemImage: "doc.viewfinder")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -382,6 +392,9 @@ struct RecipeListView: View {
                 }
                 Button(action: { showingURLImport = true }) {
                     Label("Add from URL", systemImage: "square.and.arrow.down")
+                }
+                Button(action: { showingScanRecipe = true }) {
+                    Label("Scan Recipe", systemImage: "doc.viewfinder")
                 }
             } label: {
                 Image(systemName: "plus")
