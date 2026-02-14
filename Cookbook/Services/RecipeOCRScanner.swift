@@ -4,11 +4,39 @@ import NaturalLanguage
 
 #if os(iOS)
 import UIKit
+typealias PlatformImage = UIImage
 #elseif os(macOS)
 import AppKit
+typealias PlatformImage = NSImage
 #endif
 
 struct RecipeOCRScanner {
+
+    // MARK: - Line Classification
+
+    enum LineClassification: String, CaseIterable {
+        case ingredient
+        case direction
+        case title
+        case note
+        case skip
+
+        var label: String {
+            switch self {
+            case .ingredient: return "Ingr."
+            case .direction: return "Step"
+            case .title: return "Title"
+            case .note: return "Note"
+            case .skip: return "Skip"
+            }
+        }
+    }
+
+    struct ClassifiedLine: Identifiable {
+        let id = UUID()
+        var text: String
+        var classification: LineClassification
+    }
 
     struct ScannedRecipe {
         var title: String
@@ -103,83 +131,198 @@ struct RecipeOCRScanner {
         #endif
     }
 
-    // MARK: - Recipe Parsing
+    // MARK: - Line Classification (for interactive review)
 
-    static func parseRecipe(from text: String) -> ScannedRecipe {
-        let lines = text.components(separatedBy: .newlines)
+    static func classifyLines(from text: String) -> [ClassifiedLine] {
+        let rawLines = text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
 
-        var title = ""
-        var ingredients: [String] = []
-        var directions: [String] = []
-        var notes = ""
+        var result: [ClassifiedLine] = []
+        var foundTitle = false
 
         enum Section {
             case unknown, ingredients, directions, notes
         }
-
         var currentSection: Section = .unknown
-        var unknownLines: [String] = []
 
-        for line in lines {
+        for line in rawLines {
+            guard !line.isEmpty else { continue }
+
             let lower = line.lowercased()
             let stripped = lower
                 .replacingOccurrences(of: ":", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Detect section headers
+            // Skip section headers
             if isIngredientsHeader(stripped) {
                 currentSection = .ingredients
+                result.append(ClassifiedLine(text: line, classification: .skip))
                 continue
             } else if isDirectionsHeader(stripped) {
                 currentSection = .directions
+                result.append(ClassifiedLine(text: line, classification: .skip))
                 continue
             } else if isNotesHeader(stripped) {
                 currentSection = .notes
+                result.append(ClassifiedLine(text: line, classification: .skip))
                 continue
             }
 
-            guard !line.isEmpty else { continue }
+            // Skip metadata lines (servings, yield, time, etc.)
+            if isMetadataLine(lower) {
+                result.append(ClassifiedLine(text: line, classification: .skip))
+                continue
+            }
 
+            // Classify based on current section context
             switch currentSection {
             case .unknown:
-                unknownLines.append(line)
+                if !foundTitle && line.count >= 2 {
+                    result.append(ClassifiedLine(text: line, classification: .title))
+                    foundTitle = true
+                } else if looksLikeIngredient(line) {
+                    result.append(ClassifiedLine(text: line, classification: .ingredient))
+                } else if isDirectionLike(line) {
+                    result.append(ClassifiedLine(text: line, classification: .direction))
+                } else {
+                    result.append(ClassifiedLine(text: line, classification: .skip))
+                }
 
             case .ingredients:
                 let cleaned = cleanIngredientLine(line)
                 if !cleaned.isEmpty {
-                    ingredients.append(cleaned)
+                    result.append(ClassifiedLine(text: cleaned, classification: .ingredient))
                 }
 
             case .directions:
                 let cleaned = cleanDirectionLine(line)
                 if !cleaned.isEmpty {
-                    directions.append(cleaned)
+                    result.append(ClassifiedLine(text: cleaned, classification: .direction))
                 }
 
             case .notes:
-                if notes.isEmpty {
-                    notes = line
+                result.append(ClassifiedLine(text: line, classification: .note))
+            }
+        }
+
+        // If no title was found among unknown lines, pick the first non-skip line
+        if !result.contains(where: { $0.classification == .title }) {
+            if let firstIdx = result.firstIndex(where: { $0.classification != .skip }) {
+                result[firstIdx].classification = .title
+            }
+        }
+
+        // If no section headers were found (all unknown), use heuristic classification
+        if currentSection == .unknown {
+            return classifyHeuristically(result)
+        }
+
+        return result
+    }
+
+    /// Build a recipe from user-reviewed classified lines.
+    /// Merges consecutive direction lines into paragraph-level steps.
+    static func buildRecipe(from lines: [ClassifiedLine]) -> ScannedRecipe {
+        var title = ""
+        var ingredients: [String] = []
+        var directionParagraphs: [String] = []
+        var noteLines: [String] = []
+
+        var currentDirectionParagraph = ""
+
+        for line in lines {
+            switch line.classification {
+            case .title:
+                if title.isEmpty {
+                    title = line.text
+                }
+
+            case .ingredient:
+                // Flush any in-progress direction paragraph
+                if !currentDirectionParagraph.isEmpty {
+                    directionParagraphs.append(currentDirectionParagraph)
+                    currentDirectionParagraph = ""
+                }
+                ingredients.append(cleanIngredientLine(line.text))
+
+            case .direction:
+                let cleaned = cleanDirectionLine(line.text)
+                guard !cleaned.isEmpty else { continue }
+
+                // Start a new paragraph if this line has a step number
+                let startsNewStep = cleaned.range(
+                    of: #"^\s*(?:step\s*)?\d+[.):\s]"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil
+
+                if startsNewStep && !currentDirectionParagraph.isEmpty {
+                    directionParagraphs.append(currentDirectionParagraph)
+                    currentDirectionParagraph = cleanDirectionLine(cleaned)
+                } else if currentDirectionParagraph.isEmpty {
+                    currentDirectionParagraph = cleaned
                 } else {
-                    notes += "\n" + line
+                    // Merge into current paragraph
+                    currentDirectionParagraph += " " + cleaned
+                }
+
+            case .note:
+                // Flush direction paragraph
+                if !currentDirectionParagraph.isEmpty {
+                    directionParagraphs.append(currentDirectionParagraph)
+                    currentDirectionParagraph = ""
+                }
+                noteLines.append(line.text)
+
+            case .skip:
+                // Flush direction paragraph at gaps
+                if !currentDirectionParagraph.isEmpty {
+                    directionParagraphs.append(currentDirectionParagraph)
+                    currentDirectionParagraph = ""
                 }
             }
         }
 
-        // If no section headers were found, use heuristic parsing
-        if ingredients.isEmpty && directions.isEmpty {
-            let nonEmpty = lines.filter { !$0.isEmpty }
-            return parseRecipeHeuristically(lines: nonEmpty)
+        // Flush remaining direction paragraph
+        if !currentDirectionParagraph.isEmpty {
+            directionParagraphs.append(currentDirectionParagraph)
         }
 
-        title = extractTitle(from: unknownLines)
-
         return ScannedRecipe(
-            title: title,
+            title: title.isEmpty ? "Scanned Recipe" : title,
             ingredients: ingredients,
-            directions: directions,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            directions: directionParagraphs,
+            notes: noteLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         )
+    }
+
+    // MARK: - Metadata Detection
+
+    private static func isMetadataLine(_ lower: String) -> Bool {
+        let metadataPatterns = [
+            #"^serves?\s*:?\s*\d"#,
+            #"^servings?\s*:?\s*\d"#,
+            #"^yield\s*:"#,
+            #"^makes?\s+\d"#,
+            #"^prep\s*(?:aration)?\s*time\s*:"#,
+            #"^cook\s*(?:ing)?\s*time\s*:"#,
+            #"^total\s*time\s*:"#,
+            #"^active\s*time\s*:"#,
+            #"^ready\s*in\s*:"#,
+            #"^difficulty\s*:"#,
+            #"^cuisine\s*:"#,
+            #"^course\s*:"#,
+            #"^category\s*:"#,
+            #"^calories\s*:"#,
+            #"^nutrition"#,
+            #"^source\s*:"#,
+            #"^adapted\s+from"#,
+            #"^photograph"#,
+            #"^page\s+\d"#,
+        ]
+
+        return metadataPatterns.contains { pattern in
+            lower.range(of: pattern, options: .regularExpression) != nil
+        }
     }
 
     // MARK: - Section Header Detection
@@ -212,7 +355,6 @@ struct RecipeOCRScanner {
 
     private static func cleanIngredientLine(_ line: String) -> String {
         var cleaned = line
-        // Remove bullet points, dashes, checkboxes
         cleaned = cleaned.replacingOccurrences(
             of: #"^[\s]*[-•·▪▸►◦○●☐☑✓✔]\s*"#,
             with: "",
@@ -223,13 +365,11 @@ struct RecipeOCRScanner {
 
     private static func cleanDirectionLine(_ line: String) -> String {
         var cleaned = line
-        // Remove step numbers like "1.", "1)", "Step 1:", "Step 1."
         cleaned = cleaned.replacingOccurrences(
             of: #"^[\s]*(?:step\s*)?(\d+)[.):\s]+\s*"#,
             with: "",
             options: [.regularExpression, .caseInsensitive]
         )
-        // Remove bullet points
         cleaned = cleaned.replacingOccurrences(
             of: #"^[\s]*[-•·▪▸►◦○●]\s*"#,
             with: "",
@@ -238,53 +378,42 @@ struct RecipeOCRScanner {
         return cleaned.trimmingCharacters(in: .whitespaces)
     }
 
-    // MARK: - Heuristic Parsing (No Section Headers)
+    // MARK: - Heuristic Classification (No Section Headers)
 
-    private static func parseRecipeHeuristically(lines: [String]) -> ScannedRecipe {
-        var title = ""
-        var ingredients: [String] = []
-        var directions: [String] = []
+    private static func classifyHeuristically(_ lines: [ClassifiedLine]) -> [ClassifiedLine] {
+        var result = lines
 
-        if let firstLine = lines.first {
-            title = firstLine
-        }
+        for i in result.indices {
+            if result[i].classification == .title { continue }
+            if result[i].classification == .skip && isMetadataLine(result[i].text.lowercased()) { continue }
 
-        let measurementPattern = #"(?:\d[\d\/\.\s]*(?:cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|g\b|kg|ml|liters?|litres?|pinch|dash|cloves?|cans?|packages?|pkg|sticks?|slices?|pieces?|bunch|head|medium|large|small|whole|halves|half|quarters?|inch))"#
-
-        for (index, line) in lines.enumerated() {
-            guard index > 0 else { continue }
-
-            let lower = line.lowercased()
-
-            if lower.range(of: measurementPattern, options: .regularExpression) != nil {
-                ingredients.append(cleanIngredientLine(line))
-            } else if isDirectionLike(line) {
-                directions.append(cleanDirectionLine(line))
+            let text = result[i].text
+            if looksLikeIngredient(text) {
+                result[i].classification = .ingredient
+            } else if isDirectionLike(text) {
+                result[i].classification = .direction
+            } else {
+                result[i].classification = .skip
             }
         }
 
-        // If heuristics didn't split well, put remaining lines as directions
-        if ingredients.isEmpty && directions.isEmpty {
-            directions = Array(lines.dropFirst())
-        }
+        return result
+    }
 
-        return ScannedRecipe(
-            title: title,
-            ingredients: ingredients,
-            directions: directions,
-            notes: ""
-        )
+    private static let measurementPattern = #"(?:\d[\d\/\.\s]*(?:cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|g\b|kg|ml|liters?|litres?|pinch|dash|cloves?|cans?|packages?|pkg|sticks?|slices?|pieces?|bunch|head|medium|large|small|whole|halves|half|quarters?|inch))"#
+
+    static func looksLikeIngredient(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return lower.range(of: measurementPattern, options: .regularExpression) != nil
     }
 
     private static func isDirectionLike(_ line: String) -> Bool {
         let lower = line.lowercased()
 
-        // Starts with step number
         if lower.range(of: #"^\s*(?:step\s*)?\d+[.):\s]"#, options: .regularExpression) != nil {
             return true
         }
 
-        // Starts with a cooking verb
         let cookingVerbs: Set<String> = [
             "preheat", "heat", "mix", "stir", "combine", "add", "pour",
             "bake", "cook", "boil", "simmer", "sauté", "saute", "fry",
@@ -303,24 +432,10 @@ struct RecipeOCRScanner {
             return true
         }
 
-        // Sentence-length text (longer lines are more likely directions)
         if line.count > 50 {
             return true
         }
 
         return false
-    }
-
-    private static func extractTitle(from lines: [String]) -> String {
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.count >= 2
-                && !trimmed.lowercased().hasPrefix("serves")
-                && !trimmed.lowercased().hasPrefix("yield")
-                && !trimmed.lowercased().hasPrefix("makes") {
-                return trimmed
-            }
-        }
-        return lines.first ?? "Scanned Recipe"
     }
 }

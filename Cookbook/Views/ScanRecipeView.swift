@@ -9,11 +9,27 @@ struct ScanRecipeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var scannedImages: [PlatformImage] = []
-    @State private var recognizedText: String = ""
+    @State private var classifiedLines: [RecipeOCRScanner.ClassifiedLine] = []
     @State private var parsedRecipe: RecipeOCRScanner.ScannedRecipe?
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showingCamera = true
+
+    private enum Phase {
+        case scanning
+        case classifying
+        case preview
+    }
+
+    private var phase: Phase {
+        if parsedRecipe != nil {
+            return .preview
+        } else if !classifiedLines.isEmpty {
+            return .classifying
+        } else {
+            return .scanning
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,13 +44,13 @@ struct ScanRecipeView: View {
                     )
                     .ignoresSafeArea()
                 } else {
-                    resultContent
+                    iOSContent
                 }
                 #else
                 macOSContent
                 #endif
             }
-            .navigationTitle("Scan Recipe")
+            .navigationTitle(phase == .classifying ? "Review Lines" : "Scan Recipe")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -48,6 +64,13 @@ struct ScanRecipeView: View {
                         Button("Cancel") { dismiss() }
                     }
                 }
+                if phase == .preview {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Edit Lines") {
+                            parsedRecipe = nil
+                        }
+                    }
+                }
                 #else
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -57,10 +80,10 @@ struct ScanRecipeView: View {
         }
     }
 
-    // MARK: - Result Content (iOS)
+    // MARK: - iOS Content
 
     #if os(iOS)
-    private var resultContent: some View {
+    private var iOSContent: some View {
         Form {
             scannedPagesSection
 
@@ -81,24 +104,23 @@ struct ScanRecipeView: View {
                 }
             }
 
-            if let parsed = parsedRecipe {
-                previewSection(parsed)
-                ingredientsPreview(parsed)
-                directionsPreview(parsed)
+            switch phase {
+            case .scanning:
+                EmptyView()
 
-                if !parsed.notes.isEmpty {
-                    notesPreview(parsed)
-                }
+            case .classifying:
+                classificationSection
+                buildPreviewButton
 
-                saveSection
-            }
-
-            if !recognizedText.isEmpty {
-                Section("Raw Text") {
-                    Text(recognizedText)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
+            case .preview:
+                if let parsed = parsedRecipe {
+                    previewSection(parsed)
+                    ingredientsPreview(parsed)
+                    directionsPreview(parsed)
+                    if !parsed.notes.isEmpty {
+                        notesPreview(parsed)
+                    }
+                    saveSection
                 }
             }
         }
@@ -193,24 +215,23 @@ struct ScanRecipeView: View {
                     }
                 }
 
-                if let parsed = parsedRecipe {
-                    previewSection(parsed)
-                    ingredientsPreview(parsed)
-                    directionsPreview(parsed)
-                    if !parsed.notes.isEmpty {
-                        notesPreview(parsed)
-                    }
-                    saveSection
-                }
+                switch phase {
+                case .scanning:
+                    EmptyView()
 
-                if !recognizedText.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Raw Text")
-                            .font(.headline)
-                        Text(recognizedText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
+                case .classifying:
+                    classificationSection
+                    buildPreviewButton
+
+                case .preview:
+                    if let parsed = parsedRecipe {
+                        previewSection(parsed)
+                        ingredientsPreview(parsed)
+                        directionsPreview(parsed)
+                        if !parsed.notes.isEmpty {
+                            notesPreview(parsed)
+                        }
+                        saveSection
                     }
                 }
             }
@@ -238,20 +259,116 @@ struct ScanRecipeView: View {
     }
     #endif
 
-    // MARK: - Shared Preview Sections
+    // MARK: - Classification Section (shared)
+
+    private var classificationSection: some View {
+        let header = "Tap a label to reclassify"
+        let content = ForEach(Array($classifiedLines.enumerated()), id: \.element.id) { index, $line in
+            classifiedLineRow(line: $line)
+        }
+
+        #if os(macOS)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Recognized Lines")
+                .font(.headline)
+            Text(header)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            content
+        }
+        .eraseToAnyView()
+        #else
+        return Section {
+            content
+        } header: {
+            Text("Recognized Lines")
+        } footer: {
+            Text(header)
+        }
+        .eraseToAnyView()
+        #endif
+    }
+
+    private func classifiedLineRow(line: Binding<RecipeOCRScanner.ClassifiedLine>) -> some View {
+        HStack(spacing: 10) {
+            Menu {
+                ForEach(RecipeOCRScanner.LineClassification.allCases, id: \.self) { classification in
+                    Button(action: {
+                        line.wrappedValue.classification = classification
+                    }) {
+                        HStack {
+                            Text(classification.label)
+                            if line.wrappedValue.classification == classification {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Text(line.wrappedValue.classification.label)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .frame(minWidth: 44)
+                    .background(classificationColor(line.wrappedValue.classification).opacity(0.15))
+                    .foregroundColor(classificationColor(line.wrappedValue.classification))
+                    .clipShape(Capsule())
+            }
+
+            Text(line.wrappedValue.text)
+                .font(.subheadline)
+                .foregroundColor(line.wrappedValue.classification == .skip ? .secondary : .primary)
+                .strikethrough(line.wrappedValue.classification == .skip)
+                .lineLimit(3)
+        }
+    }
+
+    private func classificationColor(_ classification: RecipeOCRScanner.LineClassification) -> Color {
+        switch classification {
+        case .ingredient: return .green
+        case .direction: return .blue
+        case .title: return .purple
+        case .note: return .orange
+        case .skip: return .gray
+        }
+    }
+
+    private var buildPreviewButton: some View {
+        #if os(macOS)
+        HStack {
+            Spacer()
+            Button(action: buildPreview) {
+                Label("Continue", systemImage: "arrow.right.circle")
+            }
+            .buttonStyle(.borderedProminent)
+            Spacer()
+        }
+        #else
+        Section {
+            Button(action: buildPreview) {
+                Label("Continue", systemImage: "arrow.right.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .font(.headline)
+        }
+        #endif
+    }
+
+    // MARK: - Preview Sections
 
     private func previewSection(_ parsed: RecipeOCRScanner.ScannedRecipe) -> some View {
         #if os(macOS)
         VStack(alignment: .leading, spacing: 12) {
             Text("Preview")
                 .font(.headline)
-            LabeledContent("Title", value: parsed.title.isEmpty ? "Scanned Recipe" : parsed.title)
+            LabeledContent("Title", value: parsed.title)
             LabeledContent("Ingredients", value: "\(parsed.ingredients.count)")
             LabeledContent("Steps", value: "\(parsed.directions.count)")
         }
         #else
         Section("Preview") {
-            LabeledContent("Title", value: parsed.title.isEmpty ? "Scanned Recipe" : parsed.title)
+            LabeledContent("Title", value: parsed.title)
             LabeledContent("Ingredients", value: "\(parsed.ingredients.count)")
             LabeledContent("Steps", value: "\(parsed.directions.count)")
         }
@@ -355,16 +472,14 @@ struct ScanRecipeView: View {
     private func processScannedImages() {
         isProcessing = true
         errorMessage = nil
+        classifiedLines = []
         parsedRecipe = nil
-        recognizedText = ""
 
         Task {
             do {
                 let text = try await RecipeOCRScanner.recognizeText(from: scannedImages)
                 await MainActor.run {
-                    recognizedText = text
-                    let parsed = RecipeOCRScanner.parseRecipe(from: text)
-                    parsedRecipe = parsed
+                    classifiedLines = RecipeOCRScanner.classifyLines(from: text)
                     isProcessing = false
                 }
             } catch {
@@ -376,11 +491,15 @@ struct ScanRecipeView: View {
         }
     }
 
+    private func buildPreview() {
+        parsedRecipe = RecipeOCRScanner.buildRecipe(from: classifiedLines)
+    }
+
     private func saveRecipe() {
         guard let parsed = parsedRecipe else { return }
 
         let recipe = Recipe(
-            title: parsed.title.isEmpty ? "Scanned Recipe" : parsed.title,
+            title: parsed.title,
             ingredients: parsed.ingredients.map { Ingredient(text: $0) },
             directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0 + 1) },
             notes: parsed.notes
@@ -388,6 +507,14 @@ struct ScanRecipeView: View {
 
         store.saveRecipe(recipe)
         dismiss()
+    }
+}
+
+// MARK: - AnyView Helper
+
+private extension View {
+    func eraseToAnyView() -> AnyView {
+        AnyView(self)
     }
 }
 
