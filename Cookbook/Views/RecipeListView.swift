@@ -433,16 +433,14 @@ struct RecipeListView: View {
     }
     
     private func shareRecipe(_ recipe: Recipe) {
-        // Create temporary file
+        // Create temporary Markdown file for sharing
         let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "\(recipe.title.replacingOccurrences(of: " ", with: "_")).cookbook.json"
+        let fileName = "\(recipe.title.replacingOccurrences(of: " ", with: "_")).md"
         let fileURL = tempDir.appendingPathComponent(fileName)
-        
+
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(recipe)
-            try data.write(to: fileURL)
+            let markdown = RecipeMarkdownSerializer.serialize(recipe)
+            try markdown.write(to: fileURL, atomically: true, encoding: .utf8)
             
             // Present share sheet
             #if os(iOS)
