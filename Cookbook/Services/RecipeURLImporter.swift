@@ -132,14 +132,35 @@ struct RecipeURLImporter {
             if let steps = instructions as? [String] {
                 directions = steps
             } else if let steps = instructions as? [[String: Any]] {
-                directions = steps.compactMap { step in
-                    if let text = step["text"] as? String {
-                        return text
+                for step in steps {
+                    let stepType = step["@type"] as? String ?? ""
+
+                    if stepType == "HowToSection" {
+                        // HowToSection contains nested HowToStep items — flatten them
+                        if let items = step["itemListElement"] as? [[String: Any]] {
+                            for item in items {
+                                if let text = item["text"] as? String, !text.isEmpty {
+                                    directions.append(text)
+                                } else if let name = item["name"] as? String, !name.isEmpty {
+                                    directions.append(name)
+                                }
+                            }
+                        }
+                    } else if let text = step["text"] as? String, !text.isEmpty {
+                        // HowToStep or plain object with text
+                        directions.append(text)
+                    } else if let items = step["itemListElement"] as? [[String: Any]] {
+                        // Fallback: itemListElement without a @type of HowToSection
+                        for item in items {
+                            if let text = item["text"] as? String, !text.isEmpty {
+                                directions.append(text)
+                            } else if let name = item["name"] as? String, !name.isEmpty {
+                                directions.append(name)
+                            }
+                        }
+                    } else if let name = step["name"] as? String, !name.isEmpty {
+                        directions.append(name)
                     }
-                    if let items = step["itemListElement"] as? [[String: Any]] {
-                        return items.compactMap { $0["text"] as? String }.joined(separator: "\n")
-                    }
-                    return step["name"] as? String
                 }
             } else if let instructionString = instructions as? String {
                 directions = instructionString
