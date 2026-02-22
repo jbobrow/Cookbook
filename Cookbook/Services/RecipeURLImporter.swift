@@ -50,7 +50,14 @@ struct RecipeURLImporter {
         }
 
         // Try JSON-LD structured data first (most recipe sites use this)
-        if let recipe = parseJSONLD(html: html, sourceURL: urlString) {
+        if var recipe = parseJSONLD(html: html, sourceURL: urlString) {
+            // If JSON-LD produced poor directions, try HTML parsing as fallback
+            if recipe.directions.count <= 1 {
+                let htmlDirections = parseDirectionsFromHTML(html: html)
+                if htmlDirections.count > recipe.directions.count {
+                    recipe.directions = htmlDirections
+                }
+            }
             return recipe
         }
 
@@ -163,7 +170,12 @@ struct RecipeURLImporter {
                     }
                 }
             } else if let instructionString = instructions as? String {
-                directions = instructionString
+                // Replace HTML block elements with newlines before stripping tags,
+                // so <p>Step 1</p><p>Step 2</p> doesn't collapse into one string
+                let withBreaks = instructionString
+                    .replacingOccurrences(of: #"</(?:p|li|div|br\s*/?)>"#, with: "\n", options: .regularExpression)
+                    .replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: .regularExpression)
+                directions = stripHTML(withBreaks)
                     .components(separatedBy: "\n")
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
@@ -228,6 +240,78 @@ struct RecipeURLImporter {
         }
 
         return totalSeconds
+    }
+
+    // MARK: - HTML Directions Fallback
+
+    private static func parseDirectionsFromHTML(html: String) -> [String] {
+        // Strategy 1: Find <li> elements inside an itemprop="recipeInstructions" container (Microdata)
+        let itempropPattern = #"itemprop\s*=\s*["']recipeInstructions["'][^>]*>([\s\S]*?)</(?:ol|ul|div|section)>"#
+        if let directions = extractStepsFromHTMLBlock(html: html, pattern: itempropPattern), !directions.isEmpty {
+            return directions
+        }
+
+        // Strategy 2: Find <li> elements inside containers with step/instruction/preparation class names
+        // NYT Cooking uses auto-generated classes like "preparation_stepContent__aB3cD"
+        let classPattern = #"<(?:ol|ul|div|section)[^>]*class\s*=\s*["'][^"']*(?:preparation_step|instruction|step_content|recipe-steps|recipe_steps|steps_list)[^"']*["'][^>]*>([\s\S]*?)</(?:ol|ul|div|section)>"#
+        if let directions = extractStepsFromHTMLBlock(html: html, pattern: classPattern), !directions.isEmpty {
+            return directions
+        }
+
+        // Strategy 3: Find individual <li> or <p> elements with step-related class names
+        var directions: [String] = []
+        let stepPattern = #"<(?:li|p)[^>]*class\s*=\s*["'][^"']*(?:step_text|step_content|instruction_text|preparation_step)[^"']*["'][^>]*>([\s\S]*?)</(?:li|p)>"#
+        if let regex = try? NSRegularExpression(pattern: stepPattern, options: .caseInsensitive) {
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, range: range)
+            for match in matches {
+                if let contentRange = Range(match.range(at: 1), in: html) {
+                    let step = stripHTML(String(html[contentRange]))
+                    if !step.isEmpty && step.count > 15 {
+                        directions.append(step)
+                    }
+                }
+            }
+        }
+
+        return directions
+    }
+
+    private static func extractStepsFromHTMLBlock(html: String, pattern: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return nil
+        }
+
+        let range = NSRange(html.startIndex..., in: html)
+        let matches = regex.matches(in: html, range: range)
+
+        var bestResult: [String] = []
+        for match in matches {
+            guard let contentRange = Range(match.range(at: 1), in: html) else { continue }
+            let content = String(html[contentRange])
+
+            // Extract <li> or <p> elements from the block
+            var items: [String] = []
+            let itemPattern = #"<(?:li|p)[^>]*>([\s\S]*?)</(?:li|p)>"#
+            if let itemRegex = try? NSRegularExpression(pattern: itemPattern, options: .caseInsensitive) {
+                let itemRange = NSRange(content.startIndex..., in: content)
+                let itemMatches = itemRegex.matches(in: content, range: itemRange)
+                for itemMatch in itemMatches {
+                    if let itemContentRange = Range(itemMatch.range(at: 1), in: content) {
+                        let text = stripHTML(String(content[itemContentRange]))
+                        if !text.isEmpty && text.count > 15 {
+                            items.append(text)
+                        }
+                    }
+                }
+            }
+
+            if items.count > bestResult.count {
+                bestResult = items
+            }
+        }
+
+        return bestResult.isEmpty ? nil : bestResult
     }
 
     // MARK: - HTML Helpers
