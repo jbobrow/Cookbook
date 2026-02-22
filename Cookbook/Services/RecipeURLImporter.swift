@@ -251,14 +251,33 @@ struct RecipeURLImporter {
             return directions
         }
 
-        // Strategy 2: Find <li> elements inside containers with step/instruction/preparation class names
-        // NYT Cooking uses auto-generated classes like "preparation_stepContent__aB3cD"
+        // Strategy 2: Find <p> elements inside step content containers (handles deeply nested structures)
+        // Sites like NYT Cooking nest each step inside a content div: <div class="preparation_stepContent__xxx"><p>...</p></div>
+        let stepContentPattern = #"<div[^>]*class\s*=\s*["'][^"']*(?:stepContent|step_content|instruction_content)[^"']*["'][^>]*>([\s\S]*?)</div>"#
+        if let regex = try? NSRegularExpression(pattern: stepContentPattern, options: .caseInsensitive) {
+            var contentDirections: [String] = []
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, range: range)
+            for match in matches {
+                if let contentRange = Range(match.range(at: 1), in: html) {
+                    let step = stripHTML(String(html[contentRange]))
+                    if !step.isEmpty && step.count > 15 {
+                        contentDirections.append(step)
+                    }
+                }
+            }
+            if !contentDirections.isEmpty {
+                return contentDirections
+            }
+        }
+
+        // Strategy 3: Find <li> elements inside containers with step/instruction/preparation class names
         let classPattern = #"<(?:ol|ul|div|section)[^>]*class\s*=\s*["'][^"']*(?:preparation_step|instruction|step_content|recipe-steps|recipe_steps|steps_list)[^"']*["'][^>]*>([\s\S]*?)</(?:ol|ul|div|section)>"#
         if let directions = extractStepsFromHTMLBlock(html: html, pattern: classPattern), !directions.isEmpty {
             return directions
         }
 
-        // Strategy 3: Find individual <li> or <p> elements with step-related class names
+        // Strategy 4: Find individual <li> or <p> elements with step-related class names
         var directions: [String] = []
         let stepPattern = #"<(?:li|p)[^>]*class\s*=\s*["'][^"']*(?:step_text|step_content|instruction_text|preparation_step)[^"']*["'][^>]*>([\s\S]*?)</(?:li|p)>"#
         if let regex = try? NSRegularExpression(pattern: stepPattern, options: .caseInsensitive) {
@@ -285,33 +304,34 @@ struct RecipeURLImporter {
         let range = NSRange(html.startIndex..., in: html)
         let matches = regex.matches(in: html, range: range)
 
-        var bestResult: [String] = []
+        // Accumulate steps from all matching blocks (handles grouped/nested structures)
+        var allResults: [String] = []
         for match in matches {
             guard let contentRange = Range(match.range(at: 1), in: html) else { continue }
             let content = String(html[contentRange])
 
             // Extract <li> or <p> elements from the block
-            var items: [String] = []
             let itemPattern = #"<(?:li|p)[^>]*>([\s\S]*?)</(?:li|p)>"#
             if let itemRegex = try? NSRegularExpression(pattern: itemPattern, options: .caseInsensitive) {
                 let itemRange = NSRange(content.startIndex..., in: content)
                 let itemMatches = itemRegex.matches(in: content, range: itemRange)
                 for itemMatch in itemMatches {
                     if let itemContentRange = Range(itemMatch.range(at: 1), in: content) {
-                        let text = stripHTML(String(content[itemContentRange]))
+                        let rawContent = String(content[itemContentRange])
+                        // Skip group wrapper items that contain nested lists (not actual steps)
+                        if rawContent.range(of: #"<(?:ol|ul)\b"#, options: .regularExpression) != nil {
+                            continue
+                        }
+                        let text = stripHTML(rawContent)
                         if !text.isEmpty && text.count > 15 {
-                            items.append(text)
+                            allResults.append(text)
                         }
                     }
                 }
             }
-
-            if items.count > bestResult.count {
-                bestResult = items
-            }
         }
 
-        return bestResult.isEmpty ? nil : bestResult
+        return allResults.isEmpty ? nil : allResults
     }
 
     // MARK: - HTML Helpers
