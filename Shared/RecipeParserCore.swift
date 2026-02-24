@@ -129,21 +129,25 @@ struct RecipeParserCore {
                 if let recipe = extractRecipe(from: dict, sourceURL: sourceURL) {
                     return recipe
                 }
-                if let graph = dict["@graph"] as? [[String: Any]] {
+                // Cast as [Any] so mixed arrays (dicts + other types) don't fail
+                if let graph = dict["@graph"] as? [Any] {
                     for item in graph {
-                        if let recipe = extractRecipe(from: item, sourceURL: sourceURL) {
+                        if let itemDict = item as? [String: Any],
+                           let recipe = extractRecipe(from: itemDict, sourceURL: sourceURL) {
                             return recipe
                         }
                     }
                 }
-            } else if let array = json as? [[String: Any]] {
+            } else if let array = json as? [Any] {
                 for item in array {
-                    if let recipe = extractRecipe(from: item, sourceURL: sourceURL) {
+                    guard let itemDict = item as? [String: Any] else { continue }
+                    if let recipe = extractRecipe(from: itemDict, sourceURL: sourceURL) {
                         return recipe
                     }
-                    if let graph = item["@graph"] as? [[String: Any]] {
+                    if let graph = itemDict["@graph"] as? [Any] {
                         for graphItem in graph {
-                            if let recipe = extractRecipe(from: graphItem, sourceURL: sourceURL) {
+                            if let graphDict = graphItem as? [String: Any],
+                               let recipe = extractRecipe(from: graphDict, sourceURL: sourceURL) {
                                 return recipe
                             }
                         }
