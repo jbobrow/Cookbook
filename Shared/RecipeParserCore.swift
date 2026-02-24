@@ -252,9 +252,27 @@ struct RecipeParserCore {
     static func parseIngredientGroupsFromHTML(html: String) -> [ParsedIngredientGroup] {
         var groups: [ParsedIngredientGroup] = []
 
-        // Strategy 1: Headers with ingredientgroup/ingredient-group class followed by <ul> lists
-        // Matches NYT Cooking, AllRecipes, and similar sites
-        let groupHeaderPattern = #"<(?:h[2-4]|p|span|div)[^>]*class\s*=\s*["'][^"']*(?:ingredientgroup|ingredient-group|ingredient_group)[^"']*["'][^>]*>([\s\S]*?)</(?:h[2-4]|p|span|div)>\s*<ul[^>]*>([\s\S]*?)</ul>"#
+        // Strategy 1: WPRM (WP Recipe Maker) — container divs with class wprm-recipe-ingredient-group
+        // Each container has an optional group name header and a <ul> of ingredients
+        let wprmGroupPattern = #"<div[\s][^>]*?class\s*=\s*["']?wprm-recipe-ingredient-group\b[^>]*>([\s\S]*?)</ul>"#
+        if let regex = try? NSRegularExpression(pattern: wprmGroupPattern, options: .caseInsensitive) {
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, range: range)
+            for match in matches {
+                guard let contentRange = Range(match.range(at: 1), in: html) else { continue }
+                let content = String(html[contentRange])
+                let name = extractGroupName(from: content)
+                let items = extractListItems(from: content)
+                if !items.isEmpty {
+                    groups.append(ParsedIngredientGroup(name: name, ingredients: items))
+                }
+            }
+        }
+        if !groups.isEmpty { return groups }
+
+        // Strategy 2: Headers with ingredientgroup/ingredient-group class followed by <ul> lists
+        // Matches NYT Cooking and similar sites
+        let groupHeaderPattern = #"<(?:h[2-6]|p|span|div)[^>]*class\s*=\s*["'][^"']*(?:ingredientgroup|ingredient-group|ingredient_group)[^"']*["'][^>]*>([\s\S]*?)</(?:h[2-6]|p|span|div)>\s*<ul[^>]*>([\s\S]*?)</ul>"#
         if let regex = try? NSRegularExpression(pattern: groupHeaderPattern, options: .caseInsensitive) {
             let range = NSRange(html.startIndex..., in: html)
             let matches = regex.matches(in: html, range: range)
@@ -270,7 +288,7 @@ struct RecipeParserCore {
         }
         if !groups.isEmpty { return groups }
 
-        // Strategy 2: Generic pattern — header tags (h2-h4) containing "for the" followed by <ul>
+        // Strategy 3: Generic pattern — header tags (h2-h4) containing "for the" followed by <ul>
         let forThePattern = #"<h[2-4][^>]*>([\s\S]*?)</h[2-4]>\s*<ul[^>]*>([\s\S]*?)</ul>"#
         if let regex = try? NSRegularExpression(pattern: forThePattern, options: .caseInsensitive) {
             let range = NSRange(html.startIndex..., in: html)
@@ -279,7 +297,6 @@ struct RecipeParserCore {
                 guard let nameRange = Range(match.range(at: 1), in: html),
                       let listRange = Range(match.range(at: 2), in: html) else { continue }
                 let name = stripHTML(String(html[nameRange]))
-                // Only match headers that look like ingredient group names
                 let nameLower = name.lowercased()
                 guard nameLower.hasPrefix("for the") || nameLower.hasPrefix("for ") else { continue }
                 let items = extractListItems(from: String(html[listRange]))
@@ -290,6 +307,19 @@ struct RecipeParserCore {
         }
 
         return groups
+    }
+
+    private static func extractGroupName(from content: String) -> String {
+        // Look for a group name in a header or span with wprm-recipe-group-name class
+        let namePattern = #"<(?:h[2-6]|span)[^>]*wprm-recipe-group-name[^>]*>([\s\S]*?)</(?:h[2-6]|span)>"#
+        if let regex = try? NSRegularExpression(pattern: namePattern, options: .caseInsensitive) {
+            let range = NSRange(content.startIndex..., in: content)
+            if let match = regex.firstMatch(in: content, range: range),
+               let nameRange = Range(match.range(at: 1), in: content) {
+                return stripHTML(String(content[nameRange]))
+            }
+        }
+        return ""
     }
 
     private static func extractListItems(from listHTML: String) -> [String] {
