@@ -15,6 +15,7 @@ import re
 import sys
 import html as html_module
 import textwrap
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Port of RecipeURLImporter's parsing helpers
@@ -52,7 +53,7 @@ def strip_html(string: str) -> str:
     return result.strip()
 
 
-def extract_steps_from_html_block(html: str, pattern: str) -> list[str] | None:
+def extract_steps_from_html_block(html: str, pattern: str) -> Optional[list[str]]:
     """Port of RecipeURLImporter.extractStepsFromHTMLBlock(html:pattern:)"""
     matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
 
@@ -280,19 +281,21 @@ def full_parse(html: str, source_url: str = "test", verbose: bool = False):
         for i, d in enumerate(json_ld_directions, 1):
             print(f"  {i}. {d[:80]}{'...' if len(d) > 80 else ''}")
 
-    # Mirror the Swift logic: if JSON-LD got >1 step, use those; otherwise try HTML fallback
-    if json_ld_directions and len(json_ld_directions) > 1:
-        if verbose:
-            print("  -> Using JSON-LD directions (>1 step found).")
-        return json_ld_directions
-
+    # Always try both JSON-LD and HTML, use whichever has more steps
     html_directions = parse_directions_from_html(html, verbose=verbose)
 
-    if json_ld_directions and len(json_ld_directions) <= 1:
-        if len(html_directions) > len(json_ld_directions):
+    if json_ld_directions and html_directions:
+        if html_directions and len(html_directions) > len(json_ld_directions):
             if verbose:
-                print(f"  -> JSON-LD had {len(json_ld_directions)} step(s), HTML fallback found {len(html_directions)}. Using HTML.")
+                print(f"  -> JSON-LD had {len(json_ld_directions)} step(s), HTML found {len(html_directions)}. Using HTML.")
             return html_directions
+        if verbose:
+            print(f"  -> JSON-LD had {len(json_ld_directions)} step(s), HTML had {len(html_directions)}. Using JSON-LD.")
+        return json_ld_directions
+
+    if json_ld_directions:
+        if verbose:
+            print("  -> Using JSON-LD directions (no HTML results).")
         return json_ld_directions
 
     return html_directions

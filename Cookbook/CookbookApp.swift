@@ -112,7 +112,7 @@ struct CookbookApp: App {
 
         for fileURL in files {
             guard let data = try? Data(contentsOf: fileURL),
-                  let parsed = try? decoder.decode(SharedRecipeData.self, from: data) else {
+                  let parsed = try? decoder.decode(RecipeParserCore.ParsedRecipe.self, from: data) else {
                 try? FileManager.default.removeItem(at: fileURL)
                 continue
             }
@@ -146,18 +146,6 @@ struct CookbookApp: App {
             }
         }
     }
-}
-
-/// Matches the share extension's RecipeParser.ParsedRecipe for decoding
-private struct SharedRecipeData: Codable {
-    var title: String
-    var ingredients: [String]
-    var directions: [String]
-    var sourceURL: String
-    var imageURL: String?
-    var prepDuration: TimeInterval
-    var cookDuration: TimeInterval
-    var notes: String
 }
 
 enum RecipeViewMode: String, CaseIterable, Identifiable {
