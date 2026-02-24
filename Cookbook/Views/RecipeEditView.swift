@@ -13,6 +13,7 @@ struct RecipeEditView: View {
     @State private var newIngredientText: [UUID: String] = [:]
     @State private var newDirection = ""
     @State private var showingDiscardAlert = false
+    @State private var scrollToSectionID: UUID?
 
     init(recipe: Recipe) {
         _recipe = State(initialValue: recipe)
@@ -58,8 +59,31 @@ struct RecipeEditView: View {
         NavigationStack {
             Group {
                 #if os(macOS)
-                ScrollView {
-                    VStack(spacing: 20) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            imageSection
+                            basicInfoSection
+                            timeSection
+                            ingredientsSection
+                            directionsSection
+                            notesSection
+                        }
+                        .padding()
+                        .frame(minWidth: 500, maxWidth: 700)
+                    }
+                    .onChange(of: scrollToSectionID) { _, newID in
+                        if let id = newID {
+                            withAnimation {
+                                proxy.scrollTo(id, anchor: .center)
+                            }
+                            scrollToSectionID = nil
+                        }
+                    }
+                }
+                #else
+                ScrollViewReader { proxy in
+                    Form {
                         imageSection
                         basicInfoSection
                         timeSection
@@ -67,17 +91,14 @@ struct RecipeEditView: View {
                         directionsSection
                         notesSection
                     }
-                    .padding()
-                    .frame(minWidth: 500, maxWidth: 700)
-                }
-                #else
-                Form {
-                    imageSection
-                    basicInfoSection
-                    timeSection
-                    ingredientsSection
-                    directionsSection
-                    notesSection
+                    .onChange(of: scrollToSectionID) { _, newID in
+                        if let id = newID {
+                            withAnimation {
+                                proxy.scrollTo(id, anchor: .center)
+                            }
+                            scrollToSectionID = nil
+                        }
+                    }
                 }
                 #endif
             }
@@ -281,12 +302,16 @@ struct RecipeEditView: View {
                 Text("Ingredients")
                     .font(.headline)
                 Spacer()
-                Button(action: addSection) {
-                    Image(systemName: "plus.circle")
+                Menu {
+                    Button(action: addSection) {
+                        Label("Add Section", systemImage: "plus")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                         .foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
-                .help("Add ingredient section")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
 
             ForEach($recipe.ingredientSections) { $section in
@@ -297,13 +322,18 @@ struct RecipeEditView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .font(.subheadline)
                             if recipe.ingredientSections.count > 1 {
-                                Button(action: {
-                                    recipe.ingredientSections.removeAll { $0.id == section.id }
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.red)
+                                Menu {
+                                    Button(role: .destructive, action: {
+                                        recipe.ingredientSections.removeAll { $0.id == section.id }
+                                    }) {
+                                        Label("Remove Section", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .foregroundColor(.secondary)
                                 }
-                                .buttonStyle(.plain)
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
                             }
                         }
                     }
@@ -332,6 +362,7 @@ struct RecipeEditView: View {
                         .disabled((newIngredientText[section.id] ?? "").isEmpty)
                     }
                 }
+                .id(section.id)
                 if section.id != recipe.ingredientSections.last?.id {
                     Divider()
                 }
@@ -371,25 +402,25 @@ struct RecipeEditView: View {
                         Text("Ingredients")
                     }
                     Spacer()
-                    if recipe.ingredientSections.count > 1 {
-                        Button(action: {
-                            recipe.ingredientSections.removeAll { $0.id == section.id }
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.red)
-                                .font(.caption)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if section.id == recipe.ingredientSections.first?.id {
+                    Menu {
                         Button(action: addSection) {
-                            Image(systemName: "plus.circle")
-                                .font(.caption)
+                            Label("Add Section", systemImage: "plus")
                         }
-                        .buttonStyle(.plain)
+                        if recipe.ingredientSections.count > 1 {
+                            Button(role: .destructive, action: {
+                                recipe.ingredientSections.removeAll { $0.id == section.id }
+                            }) {
+                                Label("Remove Section", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.body)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
+            .id(section.id)
         }
         #endif
     }
@@ -535,7 +566,9 @@ struct RecipeEditView: View {
         if recipe.ingredientSections.isEmpty {
             recipe.ingredientSections.append(IngredientSection(name: "", ingredients: []))
         }
-        recipe.ingredientSections.append(IngredientSection(name: "", ingredients: []))
+        let newSection = IngredientSection(name: "", ingredients: [])
+        recipe.ingredientSections.append(newSection)
+        scrollToSectionID = newSection.id
     }
     
     private func addDirection() {
