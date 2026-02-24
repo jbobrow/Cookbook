@@ -93,6 +93,11 @@ struct RecipeParserCore {
             if htmlDirections.count > recipe.directions.count {
                 recipe.directions = htmlDirections
             }
+            // Try to extract ingredient groups from HTML (JSON-LD only has a flat list)
+            let htmlGroups = parseIngredientGroupsFromHTML(html: html)
+            if htmlGroups.count > 1 {
+                recipe.ingredientGroups = htmlGroups
+            }
             return recipe
         }
 
@@ -240,6 +245,69 @@ struct RecipeParserCore {
             cookDuration: cookTime,
             notes: stripHTML(notes)
         )
+    }
+
+    // MARK: - HTML Ingredient Group Parsing
+
+    static func parseIngredientGroupsFromHTML(html: String) -> [ParsedIngredientGroup] {
+        var groups: [ParsedIngredientGroup] = []
+
+        // Strategy 1: Headers with ingredientgroup/ingredient-group class followed by <ul> lists
+        // Matches NYT Cooking, AllRecipes, and similar sites
+        let groupHeaderPattern = #"<(?:h[2-4]|p|span|div)[^>]*class\s*=\s*["'][^"']*(?:ingredientgroup|ingredient-group|ingredient_group)[^"']*["'][^>]*>([\s\S]*?)</(?:h[2-4]|p|span|div)>\s*<ul[^>]*>([\s\S]*?)</ul>"#
+        if let regex = try? NSRegularExpression(pattern: groupHeaderPattern, options: .caseInsensitive) {
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, range: range)
+            for match in matches {
+                guard let nameRange = Range(match.range(at: 1), in: html),
+                      let listRange = Range(match.range(at: 2), in: html) else { continue }
+                let name = stripHTML(String(html[nameRange]))
+                let items = extractListItems(from: String(html[listRange]))
+                if !items.isEmpty {
+                    groups.append(ParsedIngredientGroup(name: name, ingredients: items))
+                }
+            }
+        }
+        if !groups.isEmpty { return groups }
+
+        // Strategy 2: Generic pattern — header tags (h2-h4) containing "for the" followed by <ul>
+        let forThePattern = #"<h[2-4][^>]*>([\s\S]*?)</h[2-4]>\s*<ul[^>]*>([\s\S]*?)</ul>"#
+        if let regex = try? NSRegularExpression(pattern: forThePattern, options: .caseInsensitive) {
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, range: range)
+            for match in matches {
+                guard let nameRange = Range(match.range(at: 1), in: html),
+                      let listRange = Range(match.range(at: 2), in: html) else { continue }
+                let name = stripHTML(String(html[nameRange]))
+                // Only match headers that look like ingredient group names
+                let nameLower = name.lowercased()
+                guard nameLower.hasPrefix("for the") || nameLower.hasPrefix("for ") else { continue }
+                let items = extractListItems(from: String(html[listRange]))
+                if !items.isEmpty {
+                    groups.append(ParsedIngredientGroup(name: name, ingredients: items))
+                }
+            }
+        }
+
+        return groups
+    }
+
+    private static func extractListItems(from listHTML: String) -> [String] {
+        var items: [String] = []
+        let itemPattern = #"<li[^>]*>([\s\S]*?)</li>"#
+        if let regex = try? NSRegularExpression(pattern: itemPattern, options: .caseInsensitive) {
+            let range = NSRange(listHTML.startIndex..., in: listHTML)
+            let matches = regex.matches(in: listHTML, range: range)
+            for match in matches {
+                if let contentRange = Range(match.range(at: 1), in: listHTML) {
+                    let text = stripHTML(String(listHTML[contentRange]))
+                    if !text.isEmpty {
+                        items.append(text)
+                    }
+                }
+            }
+        }
+        return items
     }
 
     // MARK: - ISO 8601 Duration Parsing
