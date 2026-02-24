@@ -9,6 +9,7 @@ struct RecipeDetailView: View {
     @State private var ingredientToAddToReminders: Ingredient?
     @State private var remindersAlertMessage: String?
     @State private var showingCookedConfirmation = false
+    @State private var editingCategory: Category?
     @Environment(\.dismiss) private var dismiss
     #if os(macOS)
     @Environment(\.textSizeMultiplier) private var textSizeMultiplier
@@ -80,8 +81,14 @@ struct RecipeDetailView: View {
                         // Star Rating
                         HStack(spacing: 4) {
                             ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= recipe.rating ? "star.fill" : "star")
-                                    .foregroundColor(star <= recipe.rating ? .yellow : .gray)
+                                Button(action: {
+                                    recipe.rating = recipe.rating == star ? 0 : star
+                                    store.saveRecipe(recipe)
+                                }) {
+                                    Image(systemName: star <= recipe.rating ? "star.fill" : "star")
+                                        .foregroundColor(star <= recipe.rating ? .yellow : .gray)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         
@@ -346,6 +353,44 @@ struct RecipeDetailView: View {
                         Label("Share Recipe", systemImage: "square.and.arrow.up")
                     }
 
+                    Menu {
+                        Button(action: {
+                            recipe.categoryID = nil
+                            store.saveRecipe(recipe)
+                        }) {
+                            if recipe.categoryID == nil {
+                                Label("None", systemImage: "checkmark")
+                            } else {
+                                Text("None")
+                            }
+                        }
+
+                        Divider()
+
+                        ForEach(store.categories) { category in
+                            Button(action: {
+                                recipe.categoryID = category.id
+                                store.saveRecipe(recipe)
+                            }) {
+                                if recipe.categoryID == category.id {
+                                    Label(category.name, systemImage: "checkmark")
+                                } else {
+                                    Text(category.name)
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        Button(action: {
+                            editingCategory = Category(name: "", colorHex: "#289CFF")
+                        }) {
+                            Label("New Category", systemImage: "plus")
+                        }
+                    } label: {
+                        Label("Category", systemImage: "folder")
+                    }
+
                     Divider()
 
                     Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
@@ -358,6 +403,15 @@ struct RecipeDetailView: View {
         }
         .sheet(isPresented: $showingEditSheet) {
             RecipeEditView(recipe: recipe)
+        }
+        .sheet(item: $editingCategory) { category in
+            CategoryEditorView(category: category, selectedCategoryID: Binding(
+                get: { recipe.categoryID },
+                set: { newValue in
+                    recipe.categoryID = newValue
+                    store.saveRecipe(recipe)
+                }
+            ))
         }
         .alert("Delete Recipe", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
