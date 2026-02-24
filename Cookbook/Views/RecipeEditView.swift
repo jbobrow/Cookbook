@@ -273,6 +273,7 @@ struct RecipeEditView: View {
         #endif
     }
 
+    @ViewBuilder
     private var ingredientsSection: some View {
         #if os(macOS)
         VStack(alignment: .leading, spacing: 12) {
@@ -280,99 +281,65 @@ struct RecipeEditView: View {
                 Text("Ingredients")
                     .font(.headline)
                 Spacer()
-                Menu {
-                    Button(action: addSection) {
-                        Label("Add Section", systemImage: "plus")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+                Button(action: addSection) {
+                    Image(systemName: "plus.circle")
                         .foregroundColor(.secondary)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                .buttonStyle(.plain)
+                .help("Add ingredient section")
             }
 
-            VStack(spacing: 12) {
-                ForEach($recipe.ingredientSections) { $section in
-                    VStack(alignment: .leading, spacing: 8) {
-                        if recipe.ingredientSections.count > 1 || !section.name.isEmpty {
-                            HStack {
-                                TextField("Section name", text: $section.name)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.subheadline)
-                                if recipe.ingredientSections.count > 1 {
-                                    Button(action: {
-                                        recipe.ingredientSections.removeAll { $0.id == section.id }
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.red)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        ForEach($section.ingredients) { $ingredient in
-                            HStack {
-                                TextField("Ingredient", text: $ingredient.text)
-                                    .textFieldStyle(.roundedBorder)
+            ForEach($recipe.ingredientSections) { $section in
+                VStack(alignment: .leading, spacing: 8) {
+                    if recipe.ingredientSections.count > 1 || !section.name.isEmpty {
+                        HStack {
+                            TextField("Section name", text: $section.name)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.subheadline)
+                            if recipe.ingredientSections.count > 1 {
                                 Button(action: {
-                                    section.ingredients.removeAll { $0.id == ingredient.id }
+                                    recipe.ingredientSections.removeAll { $0.id == section.id }
                                 }) {
-                                    Image(systemName: "minus.circle.fill")
+                                    Image(systemName: "xmark.circle.fill")
                                         .foregroundColor(.red)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                    }
+                    ForEach($section.ingredients) { $ingredient in
                         HStack {
-                            TextField("Add ingredient", text: newIngredientBinding(for: section.id))
+                            TextField("Ingredient", text: $ingredient.text)
                                 .textFieldStyle(.roundedBorder)
-                                .onSubmit { addIngredient(to: section.id) }
-                            Button(action: { addIngredient(to: section.id) }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundColor(.green)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled((newIngredientText[section.id] ?? "").isEmpty)
-                        }
-                    }
-                }
-            }
-        }
-        #else
-        Section {
-            HStack {
-                Text("Ingredients")
-                    .font(.headline)
-                Spacer()
-                Menu {
-                    Button(action: addSection) {
-                        Label("Add Section", systemImage: "plus")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundColor(.secondary)
-                }
-            }
-            .listRowSeparator(.hidden)
-
-            ForEach($recipe.ingredientSections) { $section in
-                if recipe.ingredientSections.count > 1 || !section.name.isEmpty {
-                    HStack {
-                        TextField("Section name", text: $section.name)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        if recipe.ingredientSections.count > 1 {
                             Button(action: {
-                                recipe.ingredientSections.removeAll { $0.id == section.id }
+                                section.ingredients.removeAll { $0.id == ingredient.id }
                             }) {
-                                Image(systemName: "xmark.circle.fill")
+                                Image(systemName: "minus.circle.fill")
                                     .foregroundColor(.red)
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    HStack {
+                        TextField("Add ingredient", text: newIngredientBinding(for: section.id))
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { addIngredient(to: section.id) }
+                        Button(action: { addIngredient(to: section.id) }) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled((newIngredientText[section.id] ?? "").isEmpty)
+                    }
                 }
+                if section.id != recipe.ingredientSections.last?.id {
+                    Divider()
+                }
+            }
+        }
+        #else
+        ForEach($recipe.ingredientSections) { $section in
+            Section {
                 ForEach($section.ingredients) { $ingredient in
                     HStack {
                         TextField("Ingredient", text: $ingredient.text)
@@ -394,6 +361,33 @@ struct RecipeEditView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled((newIngredientText[section.id] ?? "").isEmpty)
+                }
+            } header: {
+                HStack {
+                    if recipe.ingredientSections.count > 1 || !section.name.isEmpty {
+                        TextField("Section name", text: $section.name)
+                            .textCase(nil)
+                    } else {
+                        Text("Ingredients")
+                    }
+                    Spacer()
+                    if recipe.ingredientSections.count > 1 {
+                        Button(action: {
+                            recipe.ingredientSections.removeAll { $0.id == section.id }
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if section.id == recipe.ingredientSections.first?.id {
+                        Button(action: addSection) {
+                            Image(systemName: "plus.circle")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
