@@ -376,10 +376,14 @@ class RecipeStore: ObservableObject {
                 newRecipe.datesCooked = []
 
                 // Reset checked ingredients
-                newRecipe.ingredients = newRecipe.ingredients.map { ingredient in
-                    var newIngredient = ingredient
-                    newIngredient.isChecked = false
-                    return newIngredient
+                newRecipe.ingredientSections = newRecipe.ingredientSections.map { section in
+                    var newSection = section
+                    newSection.ingredients = section.ingredients.map { ingredient in
+                        var newIngredient = ingredient
+                        newIngredient.isChecked = false
+                        return newIngredient
+                    }
+                    return newSection
                 }
 
                 // Restore image data from export images dictionary

@@ -191,20 +191,36 @@ struct ImportRecipeFromURLView: View {
     @ViewBuilder
     private func ingredientsPreview(_ parsed: RecipeURLImporter.ParsedRecipe) -> some View {
         if !parsed.ingredients.isEmpty {
+            let hasGroupNames = parsed.ingredientGroups.contains { !$0.name.isEmpty }
             #if os(macOS)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Ingredients")
                     .font(.headline)
-                ForEach(parsed.ingredients, id: \.self) { ingredient in
-                    Text(ingredient)
-                        .font(.subheadline)
+                ForEach(Array(parsed.ingredientGroups.enumerated()), id: \.offset) { _, group in
+                    if hasGroupNames && !group.name.isEmpty {
+                        Text(group.name)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
+                    ForEach(group.ingredients, id: \.self) { ingredient in
+                        Text(ingredient)
+                            .font(.subheadline)
+                    }
                 }
             }
             #else
             Section("Ingredients") {
-                ForEach(parsed.ingredients, id: \.self) { ingredient in
-                    Text(ingredient)
-                        .font(.subheadline)
+                ForEach(Array(parsed.ingredientGroups.enumerated()), id: \.offset) { _, group in
+                    if hasGroupNames && !group.name.isEmpty {
+                        Text(group.name)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    ForEach(group.ingredients, id: \.self) { ingredient in
+                        Text(ingredient)
+                            .font(.subheadline)
+                    }
                 }
             }
             #endif
@@ -300,9 +316,12 @@ struct ImportRecipeFromURLView: View {
     private func saveRecipe() {
         guard let parsed = parsedRecipe else { return }
 
+        let sections = parsed.ingredientGroups.map { group in
+            IngredientSection(name: group.name, ingredients: group.ingredients.map { Ingredient(text: $0) })
+        }
         var recipe = Recipe(
             title: parsed.title,
-            ingredients: parsed.ingredients.map { Ingredient(text: $0) },
+            ingredientSections: sections,
             directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0 + 1) },
             sourceURL: parsed.sourceURL,
             prepDuration: parsed.prepDuration,

@@ -46,14 +46,30 @@ struct RecipeMarkdownSerializer {
         }
 
         // Ingredients
-        if !recipe.ingredients.isEmpty {
+        let allIngredients = recipe.allIngredients
+        if !allIngredients.isEmpty {
             lines.append("## Ingredients")
             lines.append("")
-            for ingredient in recipe.ingredients {
-                let check = ingredient.isChecked ? "x" : " "
-                lines.append("- [\(check)] \(ingredient.text)")
+            let hasMultipleSections = recipe.ingredientSections.count > 1
+            let hasNamedSection = recipe.ingredientSections.contains { !$0.name.isEmpty }
+            if hasMultipleSections || hasNamedSection {
+                for section in recipe.ingredientSections {
+                    let sectionName = section.name.isEmpty ? "Other" : section.name
+                    lines.append("### \(sectionName)")
+                    lines.append("")
+                    for ingredient in section.ingredients {
+                        let check = ingredient.isChecked ? "x" : " "
+                        lines.append("- [\(check)] \(ingredient.text)")
+                    }
+                    lines.append("")
+                }
+            } else {
+                for ingredient in allIngredients {
+                    let check = ingredient.isChecked ? "x" : " "
+                    lines.append("- [\(check)] \(ingredient.text)")
+                }
+                lines.append("")
             }
-            lines.append("")
         }
 
         // Directions
@@ -92,14 +108,14 @@ struct RecipeMarkdownSerializer {
         // Parse body sections
         let sections = parseSections(body)
         let notes = sections["Notes"] ?? sections["About"] ?? ""
-        let ingredients = parseIngredients(sections["Ingredients"] ?? "")
+        let ingredientSections = parseIngredientSections(sections["Ingredients"] ?? "")
         let directions = parseDirections(sections["Directions"] ?? "")
 
         return Recipe(
             id: id,
             title: title,
             imageName: imageName,
-            ingredients: ingredients,
+            ingredientSections: ingredientSections,
             directions: directions,
             dateCreated: dateCreated,
             datesCooked: datesCooked,
@@ -271,21 +287,34 @@ struct RecipeMarkdownSerializer {
         return sections
     }
 
-    private static func parseIngredients(_ text: String) -> [Ingredient] {
-        var ingredients: [Ingredient] = []
+    private static func parseIngredientSections(_ text: String) -> [IngredientSection] {
+        var sections: [IngredientSection] = []
+        var currentName = ""
+        var currentIngredients: [Ingredient] = []
 
         for line in text.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if trimmed.hasPrefix("- [x] ") || trimmed.hasPrefix("- [X] ") {
-                ingredients.append(Ingredient(text: String(trimmed.dropFirst(6)), isChecked: true))
+            if trimmed.hasPrefix("### ") {
+                // Flush current section if it has ingredients
+                if !currentIngredients.isEmpty {
+                    sections.append(IngredientSection(name: currentName, ingredients: currentIngredients))
+                    currentIngredients = []
+                }
+                currentName = String(trimmed.dropFirst(4)).trimmingCharacters(in: .whitespaces)
+            } else if trimmed.hasPrefix("- [x] ") || trimmed.hasPrefix("- [X] ") {
+                currentIngredients.append(Ingredient(text: String(trimmed.dropFirst(6)), isChecked: true))
             } else if trimmed.hasPrefix("- [ ] ") {
-                ingredients.append(Ingredient(text: String(trimmed.dropFirst(6)), isChecked: false))
+                currentIngredients.append(Ingredient(text: String(trimmed.dropFirst(6)), isChecked: false))
             }
-            // Lines like ### headers or blank lines are silently skipped
         }
 
-        return ingredients
+        // Flush final section
+        if !currentIngredients.isEmpty {
+            sections.append(IngredientSection(name: currentName, ingredients: currentIngredients))
+        }
+
+        return sections
     }
 
     private static func parseDirections(_ text: String) -> [Direction] {

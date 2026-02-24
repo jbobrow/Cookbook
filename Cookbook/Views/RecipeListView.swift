@@ -36,7 +36,7 @@ struct RecipeListView: View {
         }
         return store.recipes.filter { recipe in
             recipe.title.localizedCaseInsensitiveContains(searchText) ||
-            recipe.ingredients.contains { $0.text.localizedCaseInsensitiveContains(searchText) }
+            recipe.allIngredients.contains { $0.text.localizedCaseInsensitiveContains(searchText) }
         }
     }
 
@@ -514,10 +514,14 @@ struct RecipeListView: View {
                     recipe.dateCreated = Date()
                     
                     // Reset checked ingredients for fresh cooking
-                    recipe.ingredients = recipe.ingredients.map { ingredient in
-                        var newIngredient = ingredient
-                        newIngredient.isChecked = false
-                        return newIngredient
+                    recipe.ingredientSections = recipe.ingredientSections.map { section in
+                        var newSection = section
+                        newSection.ingredients = section.ingredients.map { ingredient in
+                            var newIngredient = ingredient
+                            newIngredient.isChecked = false
+                            return newIngredient
+                        }
+                        return newSection
                     }
                     
                     store.saveRecipe(recipe)
