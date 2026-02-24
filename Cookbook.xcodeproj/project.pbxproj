@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2B720F522F4D7DC60069FE07 /* RecipeParserCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B720F502F4D7DC60069FE07 /* RecipeParserCore.swift */; };
+		2B720F532F4D7DC60069FE07 /* RecipeParserCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B720F502F4D7DC60069FE07 /* RecipeParserCore.swift */; };
 		CC000000000000000000000E /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -36,6 +38,7 @@
 
 /* Begin PBXFileReference section */
 		2B243B9A2F0B11D400840694 /* Cookbook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cookbook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B720F502F4D7DC60069FE07 /* RecipeParserCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeParserCore.swift; sourceTree = "<group>"; };
 		CC0000000000000000000001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -99,6 +102,7 @@
 				2B243B9C2F0B11D400840694 /* Cookbook */,
 				CC0000000000000000000002 /* ShareExtension */,
 				2B243B9B2F0B11D400840694 /* Products */,
+				2B720F512F4D7DC60069FE07 /* Shared */,
 			);
 			sourceTree = "<group>";
 		};
@@ -109,6 +113,14 @@
 				CC0000000000000000000001 /* ShareExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		2B720F512F4D7DC60069FE07 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				2B720F502F4D7DC60069FE07 /* RecipeParserCore.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -220,6 +232,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B720F522F4D7DC60069FE07 /* RecipeParserCore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,6 +240,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B720F532F4D7DC60069FE07 /* RecipeParserCore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
