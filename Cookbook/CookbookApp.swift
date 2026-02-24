@@ -120,9 +120,12 @@ struct CookbookApp: App {
             // Remove the file immediately so we don't re-import
             try? FileManager.default.removeItem(at: fileURL)
 
+            let sections = parsed.ingredientGroups.map { group in
+                IngredientSection(name: group.name, ingredients: group.ingredients.map { Ingredient(text: $0) })
+            }
             var recipe = Recipe(
                 title: parsed.title,
-                ingredients: parsed.ingredients.map { Ingredient(text: $0) },
+                ingredientSections: sections,
                 directions: parsed.directions.enumerated().map { Direction(text: $1, order: $0 + 1) },
                 sourceURL: parsed.sourceURL,
                 prepDuration: parsed.prepDuration,

@@ -14,7 +14,7 @@ struct Recipe: Identifiable, Codable {
     var title: String
     var imageData: Data?    // In-memory only; excluded from new JSON files
     var imageName: String?  // Persisted reference to image file in Images/
-    var ingredients: [Ingredient]
+    var ingredientSections: [IngredientSection]
     var directions: [Direction]
     var dateCreated: Date
     var datesCooked: [Date]
@@ -25,8 +25,12 @@ struct Recipe: Identifiable, Codable {
     var notes: String
     var categoryID: UUID?
 
+    var allIngredients: [Ingredient] {
+        ingredientSections.flatMap { $0.ingredients }
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id, title, imageData, imageName, ingredients, directions
+        case id, title, imageData, imageName, ingredients, ingredientSections, directions
         case dateCreated, datesCooked, sourceURL, rating
         case prepDuration, cookDuration, notes, categoryID
     }
@@ -37,6 +41,7 @@ struct Recipe: Identifiable, Codable {
         imageData: Data? = nil,
         imageName: String? = nil,
         ingredients: [Ingredient] = [],
+        ingredientSections: [IngredientSection]? = nil,
         directions: [Direction] = [],
         dateCreated: Date = Date(),
         datesCooked: [Date] = [],
@@ -51,7 +56,11 @@ struct Recipe: Identifiable, Codable {
         self.title = title
         self.imageData = imageData
         self.imageName = imageName
-        self.ingredients = ingredients
+        if let sections = ingredientSections {
+            self.ingredientSections = sections
+        } else {
+            self.ingredientSections = ingredients.isEmpty ? [] : [IngredientSection(name: "", ingredients: ingredients)]
+        }
         self.directions = directions
         self.dateCreated = dateCreated
         self.datesCooked = datesCooked
@@ -70,7 +79,13 @@ struct Recipe: Identifiable, Codable {
         // Decode old inline imageData for migration; new files won't have this key
         imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
         imageName = try container.decodeIfPresent(String.self, forKey: .imageName)
-        ingredients = try container.decode([Ingredient].self, forKey: .ingredients)
+        // Try ingredientSections first, fall back to legacy flat ingredients
+        if let sections = try container.decodeIfPresent([IngredientSection].self, forKey: .ingredientSections) {
+            ingredientSections = sections
+        } else {
+            let flatIngredients = try container.decode([Ingredient].self, forKey: .ingredients)
+            ingredientSections = flatIngredients.isEmpty ? [] : [IngredientSection(name: "", ingredients: flatIngredients)]
+        }
         directions = try container.decode([Direction].self, forKey: .directions)
         dateCreated = try container.decode(Date.self, forKey: .dateCreated)
         datesCooked = try container.decode([Date].self, forKey: .datesCooked)
@@ -88,7 +103,9 @@ struct Recipe: Identifiable, Codable {
         try container.encode(title, forKey: .title)
         // imageData is NOT encoded — images are stored as separate files
         try container.encodeIfPresent(imageName, forKey: .imageName)
-        try container.encode(ingredients, forKey: .ingredients)
+        try container.encode(ingredientSections, forKey: .ingredientSections)
+        // Also write flat ingredients for backward compat with older app versions on iCloud
+        try container.encode(allIngredients, forKey: .ingredients)
         try container.encode(directions, forKey: .directions)
         try container.encode(dateCreated, forKey: .dateCreated)
         try container.encode(datesCooked, forKey: .datesCooked)
@@ -117,12 +134,18 @@ struct Ingredient: Identifiable, Codable {
     var id: UUID
     var text: String
     var isChecked: Bool
-    
+
     init(id: UUID = UUID(), text: String, isChecked: Bool = false) {
         self.id = id
         self.text = text
         self.isChecked = isChecked
     }
+}
+
+struct IngredientSection: Identifiable, Codable {
+    var id: UUID = UUID()
+    var name: String
+    var ingredients: [Ingredient]
 }
 
 struct Direction: Identifiable, Codable {

@@ -2,15 +2,86 @@ import Foundation
 
 struct RecipeParserCore {
 
+    struct ParsedIngredientGroup: Codable {
+        var name: String
+        var ingredients: [String]
+    }
+
     struct ParsedRecipe: Codable {
         var title: String
-        var ingredients: [String]
+        var ingredientGroups: [ParsedIngredientGroup]
         var directions: [String]
         var sourceURL: String
         var imageURL: String?
         var prepDuration: TimeInterval
         var cookDuration: TimeInterval
         var notes: String
+
+        var ingredients: [String] {
+            ingredientGroups.flatMap { $0.ingredients }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title, ingredientGroups, ingredients, directions
+            case sourceURL, imageURL, prepDuration, cookDuration, notes
+        }
+
+        init(
+            title: String,
+            ingredientGroups: [ParsedIngredientGroup]? = nil,
+            ingredients: [String] = [],
+            directions: [String],
+            sourceURL: String,
+            imageURL: String?,
+            prepDuration: TimeInterval,
+            cookDuration: TimeInterval,
+            notes: String
+        ) {
+            self.title = title
+            if let groups = ingredientGroups {
+                self.ingredientGroups = groups
+            } else {
+                self.ingredientGroups = ingredients.isEmpty ? [] : [ParsedIngredientGroup(name: "", ingredients: ingredients)]
+            }
+            self.directions = directions
+            self.sourceURL = sourceURL
+            self.imageURL = imageURL
+            self.prepDuration = prepDuration
+            self.cookDuration = cookDuration
+            self.notes = notes
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            title = try container.decode(String.self, forKey: .title)
+            // Try ingredientGroups first, fall back to flat ingredients
+            if let groups = try container.decodeIfPresent([ParsedIngredientGroup].self, forKey: .ingredientGroups) {
+                ingredientGroups = groups
+            } else {
+                let flat = try container.decodeIfPresent([String].self, forKey: .ingredients) ?? []
+                ingredientGroups = flat.isEmpty ? [] : [ParsedIngredientGroup(name: "", ingredients: flat)]
+            }
+            directions = try container.decode([String].self, forKey: .directions)
+            sourceURL = try container.decode(String.self, forKey: .sourceURL)
+            imageURL = try container.decodeIfPresent(String.self, forKey: .imageURL)
+            prepDuration = try container.decode(TimeInterval.self, forKey: .prepDuration)
+            cookDuration = try container.decode(TimeInterval.self, forKey: .cookDuration)
+            notes = try container.decode(String.self, forKey: .notes)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(title, forKey: .title)
+            try container.encode(ingredientGroups, forKey: .ingredientGroups)
+            // Also write flat ingredients for backward compat with share extension
+            try container.encode(ingredients, forKey: .ingredients)
+            try container.encode(directions, forKey: .directions)
+            try container.encode(sourceURL, forKey: .sourceURL)
+            try container.encodeIfPresent(imageURL, forKey: .imageURL)
+            try container.encode(prepDuration, forKey: .prepDuration)
+            try container.encode(cookDuration, forKey: .cookDuration)
+            try container.encode(notes, forKey: .notes)
+        }
     }
 
     // MARK: - Main Entry Point

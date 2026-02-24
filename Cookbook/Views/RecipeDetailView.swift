@@ -139,38 +139,46 @@ struct RecipeDetailView: View {
                         .bold()
                     #endif
 
-                    ForEach($recipe.ingredients) { $ingredient in
-                        Button(action: {
-                            ingredient.isChecked.toggle()
-                            store.saveRecipe(recipe)
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(ingredient.isChecked ? .green : .gray)
-                                    .font(.title3)
-
-                                #if os(macOS)
-                                Text(ingredient.text.sanitizedForDisplay)
-                                    .font(.system(size: 17 * textSizeMultiplier))
-                                    .foregroundColor(.primary)
-                                    .strikethrough(ingredient.isChecked)
-                                    .opacity(ingredient.isChecked ? 0.6 : 1.0)
-                                #else
-                                Text(ingredient.text.sanitizedForDisplay)
-                                    .foregroundColor(.primary)
-                                    .strikethrough(ingredient.isChecked)
-                                    .opacity(ingredient.isChecked ? 0.6 : 1.0)
-                                #endif
-
-                                Spacer()
-                            }
+                    ForEach($recipe.ingredientSections) { $section in
+                        if !section.name.isEmpty {
+                            Text(section.name)
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 4)
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu {
+                        ForEach($section.ingredients) { $ingredient in
                             Button(action: {
-                                ingredientToAddToReminders = ingredient
+                                ingredient.isChecked.toggle()
+                                store.saveRecipe(recipe)
                             }) {
-                                Label("Add to Reminders", systemImage: "list.bullet")
+                                HStack(spacing: 12) {
+                                    Image(systemName: ingredient.isChecked ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(ingredient.isChecked ? .green : .gray)
+                                        .font(.title3)
+
+                                    #if os(macOS)
+                                    Text(ingredient.text.sanitizedForDisplay)
+                                        .font(.system(size: 17 * textSizeMultiplier))
+                                        .foregroundColor(.primary)
+                                        .strikethrough(ingredient.isChecked)
+                                        .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                    #else
+                                    Text(ingredient.text.sanitizedForDisplay)
+                                        .foregroundColor(.primary)
+                                        .strikethrough(ingredient.isChecked)
+                                        .opacity(ingredient.isChecked ? 0.6 : 1.0)
+                                    #endif
+
+                                    Spacer()
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(action: {
+                                    ingredientToAddToReminders = ingredient
+                                }) {
+                                    Label("Add to Reminders", systemImage: "list.bullet")
+                                }
                             }
                         }
                     }
@@ -422,8 +430,10 @@ struct RecipeDetailView: View {
         }
 
         // Reset all ingredient checkmarks
-        for i in 0..<recipe.ingredients.count {
-            recipe.ingredients[i].isChecked = false
+        for s in 0..<recipe.ingredientSections.count {
+            for i in 0..<recipe.ingredientSections[s].ingredients.count {
+                recipe.ingredientSections[s].ingredients[i].isChecked = false
+            }
         }
 
         // Reset all direction completions
