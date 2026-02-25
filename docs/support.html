@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support — Cookbo</title>
+  <meta name="description" content="Get help with Cookbo, the recipe manager for people who actually cook.">
+
+  <link rel="icon" type="image/png" href="assets/images/icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --amber:      #FFAA00;
+      --amber-dark: #E07400;
+      --dark:       #111111;
+      --muted:      #6e6e73;
+      --bg-soft:    #F7F7F5;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #ffffff;
+      color: var(--dark);
+      line-height: 1.6;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(255, 170, 0, 0.93);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      z-index: 100;
+      padding: 0 24px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .navbar {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      margin-right: auto;
+    }
+
+    .nav-brand img {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+    }
+
+    .nav-brand-name {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--dark);
+      letter-spacing: -0.01em;
+    }
+
+    .nav-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(0,0,0,0.65);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 50px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-link:hover,
+    .nav-link.active {
+      background: rgba(0,0,0,0.08);
+      color: var(--dark);
+    }
+
+    .nav-download {
+      background: var(--dark);
+      color: #fff;
+      padding: 7px 16px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s;
+      margin-left: 4px;
+    }
+
+    .nav-download:hover { opacity: 0.75; }
+
+    /* CONTENT */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 96px 24px 64px;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: clamp(32px, 6vw, 48px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--dark);
+      margin-bottom: 12px;
+    }
+
+    .intro {
+      font-size: 17px;
+      color: var(--muted);
+      margin-bottom: 40px;
+      line-height: 1.65;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-top: 48px;
+      margin-bottom: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .contact-box {
+      background: var(--bg-soft);
+      border-left: 4px solid var(--amber);
+      border-radius: 0 12px 12px 0;
+      padding: 20px 24px;
+      margin: 16px 0;
+    }
+
+    .contact-box p { font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+    .contact-box p:last-child { margin-bottom: 0; }
+
+    .email-link {
+      color: var(--amber-dark);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .email-link:hover { text-decoration: underline; }
+
+    /* FAQ */
+    .faq { margin-top: 8px; }
+
+    .faq-item {
+      border-bottom: 1px solid #e5e5e5;
+      padding: 20px 0;
+    }
+
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-q {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--dark);
+      margin-bottom: 8px;
+    }
+
+    .faq-a {
+      font-size: 15px;
+      color: var(--muted);
+      line-height: 1.7;
+      padding-left: 2px;
+    }
+
+    .faq-a a { color: var(--amber-dark); text-decoration: none; }
+    .faq-a a:hover { text-decoration: underline; }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid #e5e5e5;
+      margin-top: 80px;
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--amber-dark); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="navbar">
+      <a class="nav-brand" href="index.html">
+        <img src="assets/images/icon.png" alt="Cookbo icon">
+        <span class="nav-brand-name">Cookbo</span>
+      </a>
+      <a class="nav-link active" href="support.html">Support</a>
+      <a class="nav-link" href="privacy.html">Privacy</a>
+      <a class="nav-download" href="YOUR_APP_STORE_URL_HERE">Download</a>
+    </div>
+  </nav>
+
+  <div class="content">
+    <h1>Cookbo Support</h1>
+    <p class="intro">We're here to help. If you have questions, run into an issue, or just want to share feedback, reach out anytime.</p>
+
+    <h2>Contact Us</h2>
+    <div class="contact-box">
+      <p>For support or feedback, email us at:</p>
+      <p><a href="mailto:jbobrow+cookbo@gmail.com" class="email-link">jbobrow+cookbo@gmail.com</a></p>
+      <p>We typically respond within 24–48 hours.</p>
+    </div>
+
+    <h2>Frequently Asked Questions</h2>
+    <div class="faq">
+
+      <div class="faq-item">
+        <div class="faq-q">How do I save a recipe from a website?</div>
+        <div class="faq-a">While viewing a recipe in Safari (or any browser), tap the Share button and select <strong>Cookbo</strong> from the share sheet. The app will extract the ingredients and steps automatically.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Why didn't my recipe import correctly?</div>
+        <div class="faq-a">Most major recipe sites are supported. Some sites use non-standard formats that may not parse perfectly. You can always edit any recipe after importing — just tap Edit in the recipe detail view.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How does iCloud sync work?</div>
+        <div class="faq-a">Cookbo stores recipes as plain text files in your iCloud Drive. As long as you're signed into the same Apple ID on all your devices, recipes sync automatically across iPhone, iPad, and Mac.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Can I use Cookbo without iCloud?</div>
+        <div class="faq-a">Yes. If iCloud is not setup on your device, the app will simply keep recipes on-device only. You can always setup iCloud later, and sync files across devices.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Where are my recipe files stored?</div>
+        <div class="faq-a">If using iCloud, your files live in <strong>iCloud Drive › Cookbook › Cookbooks</strong> — visible in the Files app on iOS or Finder on Mac. Each recipe is a plain JSON file you can open, back up, or move freely.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How do I add ingredients to Apple Reminders?</div>
+        <div class="faq-a">In any recipe, long-press an ingredient to get the option to add it to Reminders. This lets you take your shopping list into Apple's Reminders app.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">What devices and OS versions are supported?</div>
+        <div class="faq-a">Cookbo requires iOS 17 / iPadOS 17 / macOS 14 (Sonoma) or later.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How do I report a bug or request a feature?</div>
+        <div class="faq-a">Email <a href="mailto:jbobrow+cookbo@gmail.com">jbobrow+cookbo@gmail.com</a> with a description of the bug or your idea. All feedback is read and appreciated.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    <p>App Store® is a registered trademark of Apple Inc.</p>
+    <p style="margin-top:8px;"><a href="support.html">Support</a> &nbsp;·&nbsp; <a href="privacy.html">Privacy Policy</a></p>
+  </footer>
+
+</body>
+</html>
