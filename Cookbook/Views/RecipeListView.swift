@@ -110,7 +110,7 @@ struct RecipeListView: View {
             LazyVStack(alignment: .leading, spacing: 20, pinnedViews: [.sectionHeaders]) {
                 ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
                     Section {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 16)], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
                             ForEach(group.recipes) { recipe in
                                 NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
                                     RecipeCardView(recipe: recipe, showCategory: false)
