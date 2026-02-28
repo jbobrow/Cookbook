@@ -83,7 +83,7 @@ struct ImportRecipeFromURLView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recipe URL")
                 .font(.headline)
-            TextField("https://example.com/recipe", text: $urlString)
+            TextField("", text: $urlString, prompt: Text("https://example.com/recipe").foregroundColor(.secondary))
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(fetchRecipe)
             Text("Paste a URL from a recipe website to automatically import the ingredients and steps.")
@@ -93,7 +93,7 @@ struct ImportRecipeFromURLView: View {
         }
         #else
         Section {
-            TextField("https://example.com/recipe", text: $urlString)
+            TextField("", text: $urlString, prompt: Text("https://example.com/recipe").foregroundColor(.secondary))
                 .textContentType(.URL)
                 .keyboardType(.URL)
                 .autocapitalization(.none)

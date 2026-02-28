@@ -445,10 +445,27 @@ struct RecipeListView: View {
             // Present share sheet
             #if os(iOS)
             let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+
+            // Configure popover presentation for iPad
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                if let popover = activityVC.popoverPresentationController {
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        popover.sourceView = window
+                        popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                        popover.permittedArrowDirections = []
+                    }
+                }
+            }
+
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                let window = windowScene.windows.first,
                let rootVC = window.rootViewController {
-                rootVC.present(activityVC, animated: true)
+                var topVC = rootVC
+                while let presentedVC = topVC.presentedViewController {
+                    topVC = presentedVC
+                }
+                topVC.present(activityVC, animated: true)
             }
             #elseif os(macOS)
             let picker = NSSharingServicePicker(items: [fileURL])
