@@ -110,7 +110,7 @@ struct RecipeListView: View {
             LazyVStack(alignment: .leading, spacing: 20, pinnedViews: [.sectionHeaders]) {
                 ForEach(Array(groupedRecipes.enumerated()), id: \.offset) { groupIndex, group in
                     Section {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 16)], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 250), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
                             ForEach(group.recipes) { recipe in
                                 NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
                                     RecipeCardView(recipe: recipe, showCategory: false)
@@ -120,6 +120,7 @@ struct RecipeListView: View {
                                     Button(action: { shareRecipe(recipe) }) {
                                         Label("Share", systemImage: "square.and.arrow.up")
                                     }
+                                    Divider()
                                     Button(role: .destructive, action: {
                                         if let index = filteredRecipes.firstIndex(where: { $0.id == recipe.id }) {
                                             deleteRecipes(at: IndexSet([index]))
@@ -445,10 +446,27 @@ struct RecipeListView: View {
             // Present share sheet
             #if os(iOS)
             let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+
+            // Configure popover presentation for iPad
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                if let popover = activityVC.popoverPresentationController {
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        popover.sourceView = window
+                        popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                        popover.permittedArrowDirections = []
+                    }
+                }
+            }
+
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                let window = windowScene.windows.first,
                let rootVC = window.rootViewController {
-                rootVC.present(activityVC, animated: true)
+                var topVC = rootVC
+                while let presentedVC = topVC.presentedViewController {
+                    topVC = presentedVC
+                }
+                topVC.present(activityVC, animated: true)
             }
             #elseif os(macOS)
             let picker = NSSharingServicePicker(items: [fileURL])
