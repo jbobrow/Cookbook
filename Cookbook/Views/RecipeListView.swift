@@ -120,6 +120,7 @@ struct RecipeListView: View {
                                     Button(action: { shareRecipe(recipe) }) {
                                         Label("Share", systemImage: "square.and.arrow.up")
                                     }
+                                    Divider()
                                     Button(role: .destructive, action: {
                                         if let index = filteredRecipes.firstIndex(where: { $0.id == recipe.id }) {
                                             deleteRecipes(at: IndexSet([index]))
