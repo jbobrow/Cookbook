@@ -16,9 +16,13 @@ struct RecipeEditView: View {
     @State private var scrollToSectionID: UUID?
 
     init(recipe: Recipe) {
-        _recipe = State(initialValue: recipe)
+        var editableRecipe = recipe
+        if recipe.title.isEmpty && recipe.ingredientSections.isEmpty {
+            editableRecipe.ingredientSections = [IngredientSection(name: "", ingredients: [])]
+        }
+        _recipe = State(initialValue: editableRecipe)
         _isNewRecipe = State(initialValue: recipe.title.isEmpty)
-        _originalRecipe = State(initialValue: recipe)
+        _originalRecipe = State(initialValue: editableRecipe)
     }
 
     private var hasUnsavedChanges: Bool {
