@@ -5,6 +5,53 @@ import AppKit
 import UIKit
 #endif
 
+#if os(iOS)
+/// A UITextField wrapper that renders the placeholder in tertiary grey,
+/// bypassing SwiftUI Form's tint color which otherwise colours it blue.
+struct URLTextField: UIViewRepresentable {
+    @Binding var text: String
+    var onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.attributedPlaceholder = NSAttributedString(
+            string: "https://example.com/recipe",
+            attributes: [.foregroundColor: UIColor.tertiaryLabel]
+        )
+        field.textContentType = .URL
+        field.keyboardType = .webSearch
+        field.autocapitalizationType = .none
+        field.autocorrectionType = .no
+        field.returnKeyType = .go
+        field.delegate = context.coordinator
+        field.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        if uiView.text != text { uiView.text = text }
+    }
+
+    class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: URLTextField
+        init(_ parent: URLTextField) { self.parent = parent }
+
+        @objc func textChanged(_ field: UITextField) {
+            parent.text = field.text ?? ""
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            parent.onSubmit()
+            return true
+        }
+    }
+}
+#endif
+
 struct ImportRecipeFromURLView: View {
     @EnvironmentObject var store: RecipeStore
     @Environment(\.dismiss) private var dismiss
@@ -83,7 +130,7 @@ struct ImportRecipeFromURLView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recipe URL")
                 .font(.headline)
-            TextField("", text: $urlString, prompt: Text("https://example.com/recipe").foregroundColor(.secondary))
+            TextField("", text: $urlString, prompt: Text("https://example.com/recipe").foregroundStyle(.placeholder))
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(fetchRecipe)
             Text("Paste a URL from a recipe website to automatically import the ingredients and steps.")
@@ -93,12 +140,7 @@ struct ImportRecipeFromURLView: View {
         }
         #else
         Section {
-            TextField("", text: $urlString, prompt: Text("https://example.com/recipe").foregroundColor(.secondary))
-                .textContentType(.URL)
-                .keyboardType(.URL)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
-                .onSubmit(fetchRecipe)
+            URLTextField(text: $urlString, onSubmit: fetchRecipe)
             fetchButton
         } header: {
             Text("Recipe URL")
