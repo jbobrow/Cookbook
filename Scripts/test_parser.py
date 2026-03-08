@@ -77,6 +77,24 @@ def extract_steps_from_html_block(html: str, pattern: str) -> Optional[list[str]
 def parse_directions_from_html(html: str, verbose: bool = False) -> list[str]:
     """Port of RecipeURLImporter.parseDirectionsFromHTML(html:)"""
 
+    # Strategy 0: Tasty Recipes plugin — <ol> inside div[class*="tasty-recipes-instructions"]
+    # Uses re.search (first match only) to avoid duplicate steps from nested containers
+    if verbose:
+        print("\n--- Strategy 0: Tasty Recipes plugin ---")
+    tasty_instructions_pattern = r'''class\s*=\s*["'][^"']*tasty-recipes-instructions[^"']*["'][^>]*>[\s\S]{0,500}?<ol[^>]*>([\s\S]*?)</ol>'''
+    m = re.search(tasty_instructions_pattern, html, re.IGNORECASE | re.DOTALL)
+    if m:
+        items = [strip_html(li.group(1)) for li in re.finditer(r'<li[^>]*>([\s\S]*?)</li>', m.group(1), re.IGNORECASE | re.DOTALL)]
+        items = [t for t in items if t and len(t) > 10]
+        if items:
+            if verbose:
+                print(f"  MATCHED: {len(items)} steps")
+                for i, d in enumerate(items, 1):
+                    print(f"  {i}. {d[:80]}{'...' if len(d) > 80 else ''}")
+            return items
+    if verbose:
+        print("  No match.")
+
     # Strategy 1: itemprop="recipeInstructions" container (Microdata)
     if verbose:
         print("\n--- Strategy 1: itemprop Microdata ---")
@@ -148,6 +166,78 @@ def parse_directions_from_html(html: str, verbose: bool = False) -> list[str]:
 # ---------------------------------------------------------------------------
 
 NYT_COOKING_HTML = '''<ol class="preparation_stepList___jqWa"><li><h3 class="pantry--label preparation_stepGroupName__vQuRQ">Prepare the Cabbage:</h3><ol class="preparation_stepList___jqWa"><li class="preparation_step__nzZHP" id="recipe-step-1"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->1</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Cut the cabbage half lengthwise through the core to get four wedges.</p></div></li><li class="preparation_step__nzZHP" id="recipe-step-2"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->2</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Heat a large well-seasoned cast-iron skillet or heavy-bottomed pan for which you have a lid over medium-high. Add 2 tablespoons of the olive oil. Once shimmering, add the cabbage, cut sides down, and season with \u00bd teaspoon of the salt. Using tongs, move the wedges back and forth gently to ensure they\u2019re evenly coated in the oil, and cook until browned on the bottom, 5 to 7 minutes. Carefully flip, sprinkle with the remaining \u00bd teaspoon salt, and cook until browned on the other side, 5 to 7 minutes. Transfer the wedges to a plate. Take the pan off the heat to cool for 5 to 10 minutes (do some prep or cleanup in the meantime).</p></div></li><li class="preparation_step__nzZHP" id="recipe-step-3"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->3</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Stir the maple syrup into the canned tomatoes. Set aside.</p></div></li><li class="preparation_step__nzZHP" id="recipe-step-4"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->4</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Heat the remaining 1 tablespoon oil in the same pan over medium heat. Add the cumin seeds and cook, tossing frequently, until they are aromatic and darker in color, 1 minute. Add the shallots and garlic and cook for 2 minutes, until the shallots starts to soften. Add the paprika, coriander, cinnamon, nutmeg and Aleppo pepper and cook for 1 minute, stirring frequently. If needed, add a drizzle of oil if things seem dry.&nbsp;</p></div></li><li class="preparation_step__nzZHP" id="recipe-step-5"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->5</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Reduce the heat to medium-low. Pour in the tomato mixture with all the juices, stir, and carefully nestle the wedges back into the pan. Cover and simmer until the cabbage is tender and the tomatoes have thickened a bit, 8 to 10 minutes, opening the lid once to check if the tomatoes are drying up (if so, add a few splashes of water).</p></div></li></ol></li><li><h3 class="pantry--label preparation_stepGroupName__vQuRQ">Make the tahini sauce while the cabbage is simmering:</h3><ol class="preparation_stepList___jqWa"><li class="preparation_step__nzZHP" id="recipe-step-6"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->6</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">In a medium bowl, whisk together the tahini, lemon juice, maple syrup, garlic, cumin, salt and pepper to taste. Add the ice water a tablespoon at a time, whisking as you go. It will get stiff at first but eventually will become creamy yet pourable. Taste for seasonings, adding more salt as desired.</p></div></li></ol></li><li><h3 class="pantry--label preparation_stepGroupName__vQuRQ">To serve:</h3><ol class="preparation_stepList___jqWa"><li class="preparation_step__nzZHP" id="recipe-step-7"><div class="pantry--ui-lg-strong preparation_stepNumber__qWIz4">Step <!-- -->7</div><div class="preparation_stepContent__CFrQM"><p class="pantry--body-long">Serve the cabbage straight from the pan. Top with cilantro and a squeeze of lemon juice. Spoon some tahini sauce generously on top and serve more on the side.</p></div></li></ol></li><li><h3 class="pantry--label preparation_stepGroupName__vQuRQ"></h3><ol class="preparation_stepList___jqWa"></ol></li></ol>'''
+
+# Tasty Recipes plugin HTML fixture — representative of mexicanmademeatless.com structure
+TASTY_RECIPES_HTML = '''
+<div class="tasty-recipes" id="tasty-recipes-12345">
+  <div class="tasty-recipes-entry-content">
+    <div class="tasty-recipes-ingredients">
+      <h3>Ingredients</h3>
+      <div class="tasty-recipes-ingredients-body">
+        <h4>For the Chile Sauce:</h4>
+        <ul>
+          <li>5 dried guajillo chiles, stems and seeds removed</li>
+          <li>3 dried ancho chiles, stems and seeds removed</li>
+          <li>4 cloves garlic</li>
+        </ul>
+        <h4>For the Soup:</h4>
+        <ul>
+          <li>2 cans (29 oz each) hominy, drained and rinsed</li>
+          <li>6 cups vegetable broth</li>
+          <li>1 white onion, quartered</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tasty-recipes-instructions">
+      <h3>Instructions</h3>
+      <div class="tasty-recipes-instructions-body">
+        <ol>
+          <li>Add the dried chiles to a large pot and cover with water. Bring to a boil, then remove from heat and soak for 20 minutes until softened.</li>
+          <li>Drain the chiles, reserving 1 cup of the soaking liquid. Blend with garlic until smooth, then strain through a fine-mesh sieve.</li>
+          <li>In a large pot over medium heat, cook the chile sauce for 5 minutes, stirring frequently, until it darkens slightly.</li>
+          <li>Add the vegetable broth, hominy, and onion. Simmer for 30-40 minutes until hominy is tender and flavors meld.</li>
+          <li>Remove the onion, taste for seasoning, and serve topped with shredded cabbage, radishes, and a squeeze of lime juice.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+'''
+
+# Tasty Recipes JSON-LD with HowToSection grouped instructions (another common format)
+TASTY_RECIPES_JSONLD_HTML = '''<html><head>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Recipe",
+  "name": "Vegan Pozole Rojo",
+  "image": "https://example.com/pozole.jpg",
+  "description": "An authentic vegan pozole rojo.",
+  "prepTime": "PT30M",
+  "cookTime": "PT45M",
+  "recipeIngredient": ["5 dried guajillo chiles", "3 dried ancho chiles", "2 cans hominy"],
+  "recipeInstructions": [
+    {
+      "@type": "HowToSection",
+      "name": "For the Chile Sauce",
+      "itemListElement": [
+        {"@type": "HowToStep", "text": "Add dried chiles to a pot, cover with water, boil then soak 20 minutes until softened."},
+        {"@type": "HowToStep", "text": "Blend soaked chiles with garlic and soaking liquid until smooth. Strain through a sieve."}
+      ]
+    },
+    {
+      "@type": "HowToSection",
+      "name": "For the Soup",
+      "itemListElement": [
+        {"@type": "HowToStep", "text": "Cook chile sauce in a large pot over medium heat for 5 minutes, stirring frequently."},
+        {"@type": "HowToStep", "text": "Add vegetable broth, hominy, and onion. Simmer 30-40 minutes until hominy is tender."},
+        {"@type": "HowToStep", "text": "Remove onion, season to taste, and serve with cabbage, radishes, and lime."}
+      ]
+    }
+  ]
+}
+</script>
+</head><body></body></html>'''
 
 
 def run_test(name: str, html: str):
@@ -242,26 +332,28 @@ def extract_json_ld_directions(html: str) -> list[str]:
             if isinstance(instructions, list) and all(isinstance(s, str) for s in instructions):
                 directions = instructions
             elif isinstance(instructions, list):
+                # Use element-by-element checking (like [Any] in Swift) to handle mixed arrays
                 for step in instructions:
-                    if not isinstance(step, dict):
-                        continue
-                    step_type = step.get("@type", "")
-                    if step_type == "HowToSection":
-                        for item in (step.get("itemListElement") or []):
-                            if isinstance(item, dict):
-                                t = item.get("text") or item.get("name") or ""
-                                if t:
-                                    directions.append(t)
-                    elif step.get("text"):
-                        directions.append(step["text"])
-                    elif step.get("itemListElement"):
-                        for item in step["itemListElement"]:
-                            if isinstance(item, dict):
-                                t = item.get("text") or item.get("name") or ""
-                                if t:
-                                    directions.append(t)
-                    elif step.get("name"):
-                        directions.append(step["name"])
+                    if isinstance(step, str):
+                        directions.append(step)
+                    elif isinstance(step, dict):
+                        step_type = step.get("@type", "")
+                        if step_type == "HowToSection":
+                            for item in (step.get("itemListElement") or []):
+                                if isinstance(item, dict):
+                                    t = item.get("text") or item.get("name") or ""
+                                    if t:
+                                        directions.append(t)
+                        elif step.get("text"):
+                            directions.append(step["text"])
+                        elif step.get("itemListElement"):
+                            for item in step["itemListElement"]:
+                                if isinstance(item, dict):
+                                    t = item.get("text") or item.get("name") or ""
+                                    if t:
+                                        directions.append(t)
+                        elif step.get("name"):
+                            directions.append(step["name"])
             elif isinstance(instructions, str):
                 text = re.sub(r"</(?:p|li|div|br\s*/?)>", "\n", instructions)
                 text = re.sub(r"<br\s*/?>", "\n", text)
@@ -341,3 +433,17 @@ if __name__ == "__main__":
         # Run built-in test against the HTML snippet (no JSON-LD present)
         result = run_test("NYT Cooking (nested grouped steps)", NYT_COOKING_HTML)
         check_results(result, 7, "NYT Cooking HTML")
+
+        # Tasty Recipes HTML fallback (no JSON-LD — tests Strategy 0)
+        result = run_test("Tasty Recipes HTML (mexicanmademeatless.com style)", TASTY_RECIPES_HTML)
+        check_results(result, 5, "Tasty Recipes HTML")
+
+        # Tasty Recipes JSON-LD with HowToSection (tests robust [Any] array handling)
+        result_jsonld = full_parse(TASTY_RECIPES_JSONLD_HTML, verbose=True)
+        print(f"\n{'='*70}")
+        if len(result_jsonld) == 5:
+            print(f"PASS [Tasty Recipes JSON-LD HowToSection]: Got 5 steps as expected.")
+        else:
+            print(f"FAIL [Tasty Recipes JSON-LD HowToSection]: Expected 5 steps, got {len(result_jsonld)}.")
+        for i, d in enumerate(result_jsonld, 1):
+            print(f"  {i}. {d[:80]}{'...' if len(d) > 80 else ''}")
