@@ -54,10 +54,6 @@ struct CookbookApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
-                Button("Import Recipe from File...") {
-                    recipeStore.shouldShowFileImport = true
-                }
-                .keyboardShortcut("o", modifiers: .command)
             }
 
             CommandMenu("View") {

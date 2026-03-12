@@ -9,7 +9,6 @@ class RecipeStore: ObservableObject {
     @Published var isICloudAvailable: Bool = false
     @Published var useLocalStorage: Bool = false
     @Published var shouldShowNewRecipe: Bool = false
-    @Published var shouldShowFileImport: Bool = false
     @Published var pendingImportURL: String?
 
     private let fileManager = FileManager.default
