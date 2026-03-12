@@ -258,6 +258,12 @@ struct RecipeListView: View {
                 store.shouldShowNewRecipe = false
             }
         }
+        .onChange(of: store.shouldShowURLImport) { _, newValue in
+            if newValue {
+                showingURLImport = true
+                store.shouldShowURLImport = false
+            }
+        }
         .fileImporter(
             isPresented: $showingImportSheet,
             allowedContentTypes: [.json, UTType(filenameExtension: "cookbook.json") ?? .json],

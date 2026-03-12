@@ -54,6 +54,10 @@ struct CookbookApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
+                Button("New Recipe from URL") {
+                    recipeStore.shouldShowURLImport = true
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             }
 
             CommandMenu("View") {
