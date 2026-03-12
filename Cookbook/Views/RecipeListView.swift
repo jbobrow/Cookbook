@@ -258,6 +258,12 @@ struct RecipeListView: View {
                 store.shouldShowNewRecipe = false
             }
         }
+        .onChange(of: store.shouldShowFileImport) { _, newValue in
+            if newValue {
+                showingImportSheet = true
+                store.shouldShowFileImport = false
+            }
+        }
         .fileImporter(
             isPresented: $showingImportSheet,
             allowedContentTypes: [.json, UTType(filenameExtension: "cookbook.json") ?? .json],
@@ -392,6 +398,9 @@ struct RecipeListView: View {
                 }
                 Button(action: { showingURLImport = true }) {
                     Label("Add from URL", systemImage: "square.and.arrow.down")
+                }
+                Button(action: { showingImportSheet = true }) {
+                    Label("Import from File...", systemImage: "doc.badge.plus")
                 }
             } label: {
                 Image(systemName: "plus")

@@ -7,11 +7,20 @@
 
 import SwiftUI
 
+#if os(macOS)
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
+    }
+}
+#endif
+
 @main
 struct CookbookApp: App {
     @StateObject private var recipeStore = RecipeStore()
     @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("textSizeMultiplier") private var textSizeMultiplier: Double = 1.0
     #endif
@@ -44,6 +53,11 @@ struct CookbookApp: App {
                     recipeStore.shouldShowNewRecipe = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
+
+                Button("Import Recipe from File...") {
+                    recipeStore.shouldShowFileImport = true
+                }
+                .keyboardShortcut("o", modifiers: .command)
             }
 
             CommandMenu("View") {
