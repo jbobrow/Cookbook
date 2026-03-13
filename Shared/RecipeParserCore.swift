@@ -365,7 +365,8 @@ struct RecipeParserCore {
             .replacingOccurrences(of: "\r", with: "\n")
 
         // Replace inline bullet separators with newlines
-        for bullet in ["▪️", "•", "▫️", "◾", "◽", "🔸", "🔹", "➡️", "👉"] {
+        // ■ (U+25A0 BLACK SQUARE) is used by many Instagram recipe accounts (e.g. @maxiskitchen)
+        for bullet in ["■", "▪️", "•", "▫️", "◾", "◽", "🔸", "🔹", "➡️", "👉"] {
             text = text.replacingOccurrences(of: bullet, with: "\n")
         }
 
@@ -377,6 +378,7 @@ struct RecipeParserCore {
         // Insert newline before timer emoji (often used for cook/prep time)
         text = text.replacingOccurrences(of: "⏲", with: "\n⏲")
         text = text.replacingOccurrences(of: "⏱", with: "\n⏱")
+        text = text.replacingOccurrences(of: "⏰", with: "\n⏰")
 
         // Insert newline before common modifier/note emoji that start a new thought
         for emoji in ["🌱", "💡", "📝", "⭐", "❗", "‼️", "⚠️"] {
@@ -556,7 +558,7 @@ struct RecipeParserCore {
             }
 
             // ── Detect time info lines ──
-            if stripped.hasPrefix("⏲") || stripped.hasPrefix("⏱") {
+            if stripped.hasPrefix("⏲") || stripped.hasPrefix("⏱") || stripped.hasPrefix("⏰") {
                 if let (p, c) = parseInstagramTimeInfo(stripped) {
                     prepDuration = p; cookDuration = c
                 }
