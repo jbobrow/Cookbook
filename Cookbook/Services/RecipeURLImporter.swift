@@ -101,8 +101,8 @@ struct RecipeURLImporter {
             directions: parsed.directions,
             sourceURL: urlString,
             imageURL: imageURL,
-            prepDuration: 0,
-            cookDuration: 0,
+            prepDuration: parsed.prepDuration,
+            cookDuration: parsed.cookDuration,
             notes: parsed.notes
         )
     }

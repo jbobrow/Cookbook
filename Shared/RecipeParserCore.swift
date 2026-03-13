@@ -165,8 +165,8 @@ struct RecipeParserCore {
             directions: parsed.directions,
             sourceURL: cleanURL,
             imageURL: imageURL,
-            prepDuration: 0,
-            cookDuration: 0,
+            prepDuration: parsed.prepDuration,
+            cookDuration: parsed.cookDuration,
             notes: parsed.notes
         )
     }
@@ -295,172 +295,289 @@ struct RecipeParserCore {
         var ingredientGroups: [ParsedIngredientGroup] = []
         var directions: [String] = []
         var notes: String = ""
+        var prepDuration: TimeInterval = 0
+        var cookDuration: TimeInterval = 0
+    }
+
+    // Numbered emoji keycaps used for direction steps
+    private static let numberedEmoji: [String] = [
+        "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"
+    ]
+
+    /// Normalizes an Instagram caption into discrete lines.
+    /// Splits on `▪️` / `•` bullets, numbered emoji, and newlines so that
+    /// each ingredient or direction becomes its own line.
+    private static func normalizeInstagramCaption(_ caption: String) -> String {
+        var text = caption
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        // Replace inline bullet separators with newlines
+        for bullet in ["▪️", "•", "▫️", "◾", "◽", "🔸", "🔹", "➡️", "👉"] {
+            text = text.replacingOccurrences(of: bullet, with: "\n")
+        }
+
+        // Insert newline before each numbered emoji so directions get their own lines
+        for emoji in numberedEmoji {
+            text = text.replacingOccurrences(of: emoji, with: "\n" + emoji)
+        }
+
+        // Insert newline before timer emoji (often used for cook/prep time)
+        text = text.replacingOccurrences(of: "⏲", with: "\n⏲")
+        text = text.replacingOccurrences(of: "⏱", with: "\n⏱")
+
+        // Insert newline before common modifier/note emoji that start a new thought
+        for emoji in ["🌱", "💡", "📝", "⭐", "❗", "‼️", "⚠️"] {
+            text = text.replacingOccurrences(of: emoji, with: "\n" + emoji)
+        }
+
+        return text
+    }
+
+    /// Returns true if the line looks like a numbered direction (starts with a digit-keycap emoji or "1.", "Step 1", etc.).
+    private static func isDirectionLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        for emoji in numberedEmoji {
+            if trimmed.hasPrefix(emoji) { return true }
+        }
+        if let regex = try? NSRegularExpression(pattern: #"^(?:step\s*)?\d+[\.\)\:\-]\s+"#, options: .caseInsensitive),
+           regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil {
+            return true
+        }
+        return false
+    }
+
+    /// Strips numbered-emoji or "Step N:" prefixes from a direction line.
+    private static func stripDirectionPrefix(_ line: String) -> String {
+        var text = line.trimmingCharacters(in: .whitespaces)
+        // Strip keycap emoji prefix
+        for emoji in numberedEmoji {
+            if text.hasPrefix(emoji) {
+                text = String(text.dropFirst(emoji.count)).trimmingCharacters(in: .whitespaces)
+                // Also strip a trailing period/colon/dash right after the emoji
+                if let first = text.first, ".:-)– ".contains(first) {
+                    text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+                }
+                return text
+            }
+        }
+        // Strip textual step number prefix
+        if let regex = try? NSRegularExpression(pattern: #"^(?:step\s*)?\d+[\.\)\:\-]\s*"#, options: .caseInsensitive) {
+            let range = NSRange(text.startIndex..., in: text)
+            text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+        }
+        return text.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Tries to parse a time string like "10 minute total prep + 45 minute cook time"
+    /// and returns (prepSeconds, cookSeconds).
+    private static func parseInstagramTimeInfo(_ line: String) -> (TimeInterval, TimeInterval)? {
+        let lower = line.lowercased()
+        guard lower.contains("min") || lower.contains("hour") || lower.contains("hr") else { return nil }
+
+        var prep: TimeInterval = 0
+        var cook: TimeInterval = 0
+
+        // Match patterns like "10 minute prep", "45 minute cook", "1 hour cook"
+        let pattern = #"(\d+)\s*(?:minute|min|hour|hr)s?\s*(?:total\s*)?(\w+)"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            let range = NSRange(lower.startIndex..., in: lower)
+            let matches = regex.matches(in: lower, range: range)
+            for match in matches {
+                guard let numRange = Range(match.range(at: 1), in: lower),
+                      let labelRange = Range(match.range(at: 2), in: lower) else { continue }
+                let num = Double(lower[numRange]) ?? 0
+                let label = String(lower[labelRange])
+                let isHours = lower[Range(match.range, in: lower)!].contains("hour") || lower[Range(match.range, in: lower)!].contains("hr")
+                let seconds = num * (isHours ? 3600 : 60)
+                if label.hasPrefix("prep") {
+                    prep = seconds
+                } else if label.hasPrefix("cook") {
+                    cook = seconds
+                }
+            }
+        }
+
+        return (prep > 0 || cook > 0) ? (prep, cook) : nil
     }
 
     /// Parses unstructured Instagram caption text to extract recipe components.
+    ///
+    /// Handles two main formats seen in the wild:
+    /// 1. **Inline bullets** – `GroupName:▪️item1▪️item2▪️` with `1️⃣`-prefixed directions
+    /// 2. **Line-per-item** – newline-separated with keyword headers ("Ingredients:", "Directions:", etc.)
     static func parseInstagramCaption(_ caption: String) -> InstagramRecipeParts {
         guard !caption.isEmpty else { return InstagramRecipeParts() }
 
         var result = InstagramRecipeParts()
 
-        // Normalize line endings
-        let text = caption
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
+        // Normalize: split inline bullets and numbered emoji into separate lines
+        let normalized = normalizeInstagramCaption(caption)
+        let lines = normalized.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
 
-        let lines = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-
-        // Identify sections by header keywords
-        enum Section { case unknown, title, ingredients, directions, notes }
-        var currentSection: Section = .unknown
-        var titleLines: [String] = []
-        var ingredientLines: [String] = []
+        // Classify each line into sections
+        enum Section { case preamble, ingredients, directions, notes }
+        var currentSection: Section = .preamble
+        var preambleLines: [String] = []
         var directionLines: [String] = []
         var noteLines: [String] = []
-        var currentGroupName = ""
         var groups: [(name: String, items: [String])] = []
+        var currentGroupName = ""
+        var currentGroupItems: [String] = []
+        var prepDuration: TimeInterval = 0
+        var cookDuration: TimeInterval = 0
 
-        let ingredientHeaders = [
+        let ingredientHeaders: Set<String> = [
             "ingredients", "ingredient", "what you need", "what you'll need",
             "you'll need", "you will need", "shopping list", "for the recipe"
         ]
-        let directionHeaders = [
+        let directionHeaders: Set<String> = [
             "directions", "direction", "instructions", "instruction", "steps",
-            "method", "how to make", "how to", "preparation", "prep",
-            "to make", "procedure", "let's cook", "let's make", "recipe"
+            "method", "how to make", "how to", "preparation",
+            "to make", "procedure"
         ]
-        let noteHeaders = [
+        let noteHeaders: Set<String> = [
             "notes", "note", "tips", "tip", "variations", "serving",
             "nutrition", "storage", "substitutions"
         ]
 
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-
-            let lower = trimmed.lowercased()
-                .trimmingCharacters(in: CharacterSet(charactersIn: ":;-*•#🔸🔹📝🥘🍳🧑\u{200D}🍴✨💡👇⬇️"))
+        /// Strips emoji and punctuation to get the keyword core of a potential header.
+        func headerKeyword(_ line: String) -> String {
+            line.lowercased()
+                .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
                 .trimmingCharacters(in: .whitespaces)
+        }
 
-            // Check if this line is a section header
-            if ingredientHeaders.contains(where: { lower == $0 || lower.hasPrefix($0 + ":") || lower.hasPrefix($0 + " ") && lower.count < $0.count + 15 }) {
-                // Flush any current ingredient group before switching
-                if !ingredientLines.isEmpty {
-                    groups.append((name: currentGroupName, items: ingredientLines))
-                    ingredientLines = []
-                }
-                currentGroupName = ""
+        for line in lines {
+            let stripped = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !stripped.isEmpty else { continue }
+
+            // ── Detect explicit section keyword headers ──
+            let keyword = headerKeyword(stripped)
+            if ingredientHeaders.contains(keyword) {
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
                 currentSection = .ingredients
                 continue
             }
-
-            if directionHeaders.contains(where: { lower == $0 || lower.hasPrefix($0 + ":") || lower.hasPrefix($0 + " ") && lower.count < $0.count + 15 }) {
-                // Flush remaining ingredients
-                if !ingredientLines.isEmpty {
-                    groups.append((name: currentGroupName, items: ingredientLines))
-                    ingredientLines = []
-                }
+            if directionHeaders.contains(keyword) {
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
                 currentSection = .directions
                 continue
             }
-
-            if noteHeaders.contains(where: { lower == $0 || lower.hasPrefix($0 + ":") }) {
+            if noteHeaders.contains(keyword) {
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
                 currentSection = .notes
                 continue
             }
 
-            // Check for ingredient sub-group headers (e.g., "For the sauce:")
-            if currentSection == .ingredients {
-                let forThePattern = #"^(?:for (?:the )?|)([\w\s]+):$"#
-                if let regex = try? NSRegularExpression(pattern: forThePattern, options: .caseInsensitive),
-                   let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
-                   let nameRange = Range(match.range(at: 1), in: trimmed) {
-                    let name = String(trimmed[nameRange]).trimmingCharacters(in: .whitespaces)
-                    // If it looks like a group header and is short
-                    if name.count < 40 && !name.contains(",") {
-                        if !ingredientLines.isEmpty {
-                            groups.append((name: currentGroupName, items: ingredientLines))
-                            ingredientLines = []
-                        }
-                        currentGroupName = trimmed.hasSuffix(":") ? String(trimmed.dropLast()) : trimmed
-                        continue
-                    }
+            // ── Detect numbered-emoji directions regardless of current section ──
+            if isDirectionLine(stripped) {
+                // Flush any open ingredient group first
+                if currentSection == .ingredients || currentSection == .preamble {
+                    flushGroup(&currentGroupName, &currentGroupItems, &groups)
+                }
+                currentSection = .directions
+                let dirText = stripDirectionPrefix(stripped)
+                if !dirText.isEmpty {
+                    directionLines.append(dirText)
+                }
+                continue
+            }
+
+            // ── Detect ingredient group header: "GroupName:▪️..." becomes "GroupName:" after normalization ──
+            // A short line ending with ":" that doesn't match a keyword header is likely a group name
+            if stripped.hasSuffix(":") {
+                let possibleName = String(stripped.dropLast()).trimmingCharacters(in: .whitespaces)
+                let possibleKeyword = headerKeyword(possibleName)
+                if possibleName.count < 50
+                    && !ingredientHeaders.contains(possibleKeyword)
+                    && !directionHeaders.contains(possibleKeyword)
+                    && !noteHeaders.contains(possibleKeyword) {
+                    // Treat as a new ingredient group header
+                    flushGroup(&currentGroupName, &currentGroupItems, &groups)
+                    currentGroupName = possibleName
+                    currentSection = .ingredients
+                    continue
                 }
             }
 
-            // Add lines to the appropriate section
+            // ── Detect time info lines ──
+            if stripped.hasPrefix("⏲") || stripped.hasPrefix("⏱") {
+                if let (p, c) = parseInstagramTimeInfo(stripped) {
+                    prepDuration = p; cookDuration = c
+                }
+                continue
+            }
+
+            // ── Accumulate into the current section ──
             switch currentSection {
-            case .unknown:
-                // Before any section header, treat as title/intro
-                titleLines.append(trimmed)
-            case .title:
-                titleLines.append(trimmed)
+            case .preamble:
+                preambleLines.append(stripped)
             case .ingredients:
-                let cleaned = stripLeadingBullets(trimmed)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*▪️✅☑️🟢"))
+                let cleaned = stripLeadingBullets(stripped)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*▪️✅☑️🟢▫️◾◽"))
                     .trimmingCharacters(in: .whitespaces)
                 if !cleaned.isEmpty {
-                    ingredientLines.append(cleaned)
+                    currentGroupItems.append(cleaned)
                 }
             case .directions:
-                var cleaned = trimmed
-                // Remove leading step numbers like "1.", "1)", "Step 1:"
-                if let regex = try? NSRegularExpression(pattern: #"^(?:step\s*)?\d+[\.\)\:\-]\s*"#, options: .caseInsensitive) {
-                    let range = NSRange(cleaned.startIndex..., in: cleaned)
-                    cleaned = regex.stringByReplacingMatches(in: cleaned, range: range, withTemplate: "")
-                }
-                cleaned = stripLeadingBullets(cleaned)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*▪️"))
-                    .trimmingCharacters(in: .whitespaces)
+                let cleaned = stripDirectionPrefix(stripped)
                 if !cleaned.isEmpty {
                     directionLines.append(cleaned)
                 }
             case .notes:
-                noteLines.append(trimmed)
+                noteLines.append(stripped)
             }
         }
 
-        // Flush remaining ingredient group
-        if !ingredientLines.isEmpty {
-            groups.append((name: currentGroupName, items: ingredientLines))
-        }
+        // Flush last ingredient group
+        flushGroup(&currentGroupName, &currentGroupItems, &groups)
 
-        // Build the title from initial lines (before any section header)
-        if !titleLines.isEmpty {
-            // Use first meaningful line as title, rest as notes preamble
-            result.title = titleLines.first ?? ""
-
-            // Remove hashtags and emoji-only segments from title
-            result.title = removeHashtags(result.title)
+        // ── Title ──
+        if let first = preambleLines.first {
+            result.title = removeHashtags(first)
+                // Strip trailing decorative emoji
+                .trimmingCharacters(in: CharacterSet(charactersIn: "✨🔥💫⭐🍴🥘🍳"))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             if result.title.count > 80 {
                 let truncated = String(result.title.prefix(80))
                 if let lastSpace = truncated.lastIndex(of: " ") {
                     result.title = String(truncated[..<lastSpace]) + "…"
                 }
             }
-
-            // Add remaining intro lines to notes if they contain useful text
-            if titleLines.count > 1 {
-                let extraIntro = titleLines.dropFirst()
-                    .filter { !$0.isEmpty && !isHashtagLine($0) }
-                    .joined(separator: "\n")
-                if !extraIntro.isEmpty {
-                    noteLines.insert(contentsOf: extraIntro.components(separatedBy: "\n"), at: 0)
-                }
-            }
         }
 
-        // Build ingredient groups
+        // Remaining preamble lines → notes
+        if preambleLines.count > 1 {
+            let extra = preambleLines.dropFirst().filter { !isHashtagLine($0) }
+            if !extra.isEmpty { noteLines.insert(contentsOf: extra, at: 0) }
+        }
+
         result.ingredientGroups = groups.map { ParsedIngredientGroup(name: $0.name, ingredients: $0.items) }
-
-        // Build directions
         result.directions = directionLines
+        result.notes = noteLines.filter { !isHashtagLine($0) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Build notes (strip hashtag lines)
-        let filteredNotes = noteLines.filter { !isHashtagLine($0) }
-        result.notes = filteredNotes.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        result.prepDuration = prepDuration
+        result.cookDuration = cookDuration
 
         return result
+    }
+
+    /// Flush the current ingredient group into the groups array.
+    private static func flushGroup(
+        _ name: inout String,
+        _ items: inout [String],
+        _ groups: inout [(name: String, items: [String])]
+    ) {
+        if !items.isEmpty {
+            groups.append((name: name, items: items))
+            items = []
+        }
+        name = ""
     }
 
     /// Returns true if the line is primarily hashtags.
