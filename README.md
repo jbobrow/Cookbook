@@ -1,4 +1,4 @@
-# Cookbook - A Simple Recipe Manager
+# Cookbo - A Simple Recipe Manager
 
 A clean, minimalist SwiftUI app for iOS, iPadOS, and macOS that manages multiple cookbooks with recipes stored as flat files, synced via iCloud or stored locally.
 
