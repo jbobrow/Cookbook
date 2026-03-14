@@ -592,25 +592,28 @@
     <div class="compat-group">
       <p class="section-label">Social &amp; Video Platforms</p>
       <h2 class="section-heading">Short-form recipe content</h2>
-      <p class="section-desc">These platforms don't embed parseable recipe data in their pages — recipes live in video captions or comments.</p>
+      <p class="section-desc">Most platforms don't embed structured recipe data — but Instagram posts and reels now import directly from the caption.</p>
 
       <table class="compat-table">
         <thead>
           <tr>
             <th>Platform</th>
-            <th>Why it doesn't work</th>
+            <th>Notes</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><div class="site-name">TikTok</div></td>
-            <td><div class="site-note">Recipes are embedded in video content or free-form captions with no structured data.</div></td>
-            <td class="status-cell"><span class="badge badge-no">✕ Not yet</span></td>
+            <td>
+              <div class="site-name">Instagram</div>
+              <div class="site-note">Imports recipe title, ingredients, steps, and post image from the caption. Works best when the caption lists ingredients and steps clearly — either as inline bullets (e.g. ■ or •) or with section headers like "Ingredients:" and "Instructions:".</div>
+            </td>
+            <td><div class="site-note">Posts and Reels supported. Share directly from the Instagram app using the Share Sheet.</div></td>
+            <td class="status-cell"><span class="badge badge-works">✓ Works</span></td>
           </tr>
           <tr>
-            <td><div class="site-name">Instagram</div></td>
-            <td><div class="site-note">No structured recipe data available; content requires authentication.</div></td>
+            <td><div class="site-name">TikTok</div></td>
+            <td><div class="site-note">Recipes are embedded in video content or free-form captions with no structured data.</div></td>
             <td class="status-cell"><span class="badge badge-no">✕ Not yet</span></td>
           </tr>
           <tr>
