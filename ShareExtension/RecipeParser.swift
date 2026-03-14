@@ -48,7 +48,10 @@ struct RecipeParser {
             throw ParseError.parsingFailed
         }
 
-        if let recipe = RecipeParserCore.parseRecipe(html: html, sourceURL: urlString) {
+        if var recipe = RecipeParserCore.parseRecipe(html: html, sourceURL: urlString) {
+            if RecipeParserCore.isInstagramURL(urlString), recipe.imageURL == nil {
+                recipe.imageURL = await fetchInstagramThumbnailURL(urlString: urlString)
+            }
             return recipe
         }
 
@@ -60,6 +63,17 @@ struct RecipeParser {
         }
 
         throw ParseError.parsingFailed
+    }
+
+    /// Fetches only the thumbnail_url from Instagram's oEmbed endpoint.
+    private static func fetchInstagramThumbnailURL(urlString: String) async -> String? {
+        guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let oembedURL = URL(string: "https://www.instagram.com/api/v1/oembed/?url=\(encoded)"),
+              let (data, _) = try? await URLSession.shared.data(from: oembedURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return json["thumbnail_url"] as? String
     }
 
     /// Fallback: use Instagram's oEmbed endpoint to get post metadata.

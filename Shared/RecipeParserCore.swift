@@ -248,13 +248,26 @@ struct RecipeParserCore {
         for (entity, replacement) in entities {
             result = result.replacingOccurrences(of: entity, with: replacement)
         }
-        // Decode numeric character references like &#8220;
+        // Decode decimal numeric character references like &#8220;
         if let regex = try? NSRegularExpression(pattern: #"&#(\d+);"#) {
             let range = NSRange(result.startIndex..., in: result)
             let matches = regex.matches(in: result, range: range).reversed()
             for match in matches {
                 if let codeRange = Range(match.range(at: 1), in: result),
                    let code = UInt32(result[codeRange]),
+                   let scalar = Unicode.Scalar(code) {
+                    let charRange = Range(match.range, in: result)!
+                    result.replaceSubrange(charRange, with: String(Character(scalar)))
+                }
+            }
+        }
+        // Decode hex numeric character references like &#x2022; &#x1F35E;
+        if let regex = try? NSRegularExpression(pattern: #"&#[xX]([0-9a-fA-F]+);"#) {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range).reversed()
+            for match in matches {
+                if let codeRange = Range(match.range(at: 1), in: result),
+                   let code = UInt32(result[codeRange], radix: 16),
                    let scalar = Unicode.Scalar(code) {
                     let charRange = Range(match.range, in: result)!
                     result.replaceSubrange(charRange, with: String(Character(scalar)))
@@ -548,6 +561,35 @@ struct RecipeParserCore {
                 continue
             }
 
+            // ── Detect "Header: first-item" — header keyword and content on the same line ──
+            // e.g. "Ingredients: 1 tsp yeast" (after bullet-splitting) or "Instructions: Mix..."
+            let strippedLower = stripped.lowercased()
+            if let match = ingredientHeaders.first(where: { strippedLower.hasPrefix($0 + ":") }) {
+                let rest = String(stripped.dropFirst(match.count + 1)).trimmingCharacters(in: .whitespaces)
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
+                currentSection = .ingredients
+                let cleaned = stripLeadingBullets(rest)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*▪️✅☑️🟢▫️◾◽"))
+                    .trimmingCharacters(in: .whitespaces)
+                if !cleaned.isEmpty { currentGroupItems.append(cleaned) }
+                continue
+            }
+            if let match = directionHeaders.first(where: { strippedLower.hasPrefix($0 + ":") }) {
+                let rest = String(stripped.dropFirst(match.count + 1)).trimmingCharacters(in: .whitespaces)
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
+                currentSection = .directions
+                let dirText = stripDirectionPrefix(rest)
+                if !dirText.isEmpty { directionLines.append(dirText) }
+                continue
+            }
+            if let match = noteHeaders.first(where: { strippedLower.hasPrefix($0 + ":") }) {
+                let rest = String(stripped.dropFirst(match.count + 1)).trimmingCharacters(in: .whitespaces)
+                flushGroup(&currentGroupName, &currentGroupItems, &groups)
+                currentSection = .notes
+                if !rest.isEmpty { noteLines.append(rest) }
+                continue
+            }
+
             // ── Detect note/modifier emoji lines (e.g. "🌱Vegan Modification: ...") ──
             let noteEmojiPrefixes = ["🌱", "💡", "📝", "❗", "‼️", "⚠️"]
             if noteEmojiPrefixes.contains(where: { stripped.hasPrefix($0) }) {
@@ -605,10 +647,13 @@ struct RecipeParserCore {
             }
 
             // ── Skip promotional / boilerplate lines ──
-            let lower = stripped.lowercased()
+            // Normalize Mathematical Bold/Italic Unicode letters (U+1D400-U+1D7FF) to ASCII
+            // so "𝐋𝐈𝐍𝐊 𝐈𝐍 𝐌𝐘 𝐁𝐈𝐎" matches the same as "LINK IN MY BIO".
+            let lower = flattenMathematicalUnicode(stripped).lowercased()
             if lower.contains("subscribe to my newsletter") || lower.contains("link in my bio")
                 || lower.contains("link in bio") || lower.contains("delivered to your inbox")
-                || lower.contains("printable pdf") {
+                || lower.contains("printable pdf") || lower.contains("full recipe on my blog")
+                || lower.contains("full recipe on my website") {
                 continue
             }
 
@@ -624,6 +669,7 @@ struct RecipeParserCore {
                     currentGroupItems.append(cleaned)
                 }
             case .directions:
+                if isHashtagLine(stripped) { continue }
                 let cleaned = stripDirectionPrefix(stripped)
                 if !cleaned.isEmpty {
                     directionLines.append(cleaned)
@@ -679,6 +725,24 @@ struct RecipeParserCore {
             items = []
         }
         name = ""
+    }
+
+    /// Maps Mathematical Bold/Italic/Script Unicode characters (U+1D400-U+1D7FF) to their
+    /// plain ASCII equivalents so boilerplate checks work regardless of Unicode styling.
+    /// e.g. "𝐋𝐈𝐍𝐊 𝐈𝐍 𝐌𝐘 𝐁𝐈𝐎" → "LINK IN MY BIO"
+    private static func flattenMathematicalUnicode(_ text: String) -> String {
+        String(text.unicodeScalars.map { scalar -> Unicode.Scalar in
+            let v = scalar.value
+            guard v >= 0x1D400, v <= 0x1D7FF else { return scalar }
+            // Each style group in the block has 26 capitals then 26 smalls (with a few
+            // historical-compat exceptions we ignore). Offset within the 52-char group:
+            let offset = (v - 0x1D400) % 52
+            if offset < 26 {
+                return Unicode.Scalar(UInt32(("A" as Unicode.Scalar).value) + offset)!
+            } else {
+                return Unicode.Scalar(UInt32(("a" as Unicode.Scalar).value) + (offset - 26))!
+            }
+        }.map(Character.init))
     }
 
     /// Returns true if the line is primarily hashtags.
@@ -1241,7 +1305,7 @@ struct RecipeParserCore {
             let range = NSRange(html.startIndex..., in: html)
             if let match = regex.firstMatch(in: html, range: range),
                let contentRange = Range(match.range(at: 1), in: html) {
-                return String(html[contentRange])
+                return decodeHTMLEntities(String(html[contentRange]))
             }
         }
 
@@ -1250,7 +1314,7 @@ struct RecipeParserCore {
             let range = NSRange(html.startIndex..., in: html)
             if let match = regex.firstMatch(in: html, range: range),
                let contentRange = Range(match.range(at: 1), in: html) {
-                return String(html[contentRange])
+                return decodeHTMLEntities(String(html[contentRange]))
             }
         }
 
